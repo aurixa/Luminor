@@ -5,42 +5,27 @@ cd "$(dirname "$0")"
 
 # Display game logo
 echo "
-█████        ██    ██  ████    ████  ██████  ██    ██   ██████   ██████
-██          ████  ████  ██ █  █ ██  ██    ██ ███   ██  ██    ██  ██   ██
-██         ██  ████  ██ ██  ██  ██  ██    ██ ████  ██  ██    ██  ██████
-██        ████████████ ██      ██  ██    ██ ██ ██ ██  ██    ██  ██   ██
-███████  ██          ██ ██      ██   ██████  ██   ███   ██████   ██   ██
+██      ██    ██ ██     ██ ██ ██    ██  ██████  ██████  
+██      ██    ██ ███   ███ ██ ███   ██ ██    ██ ██   ██ 
+██      ██    ██ ████ ████ ██ ████  ██ ██    ██ ██████  
+██      ██    ██ ██ ███ ██ ██ ██ ██ ██ ██    ██ ██   ██ 
+███████  ██████  ██     ██ ██ ██  ████  ██████  ██   ██ 
 "
 
 echo "🎮 Starting Luminor Game..."
-echo "🌐 Launching development server..."
 
-# Check if npm is installed
-if ! command -v npm &> /dev/null; then
-    echo "❌ Error: npm is not installed. Please install Node.js from https://nodejs.org/"
-    echo "Press any key to exit..."
-    read -n 1
-    exit 1
+# Kill any existing Vite processes
+if command -v lsof &> /dev/null; then
+    EXISTING_PID=$(lsof -i :5173 -t 2>/dev/null)
+    if [ -n "$EXISTING_PID" ]; then
+        echo "🧹 Cleaning up existing server..."
+        kill -9 $EXISTING_PID 2>/dev/null
+    fi
 fi
 
-# Start Vite in the background
-npx vite &
-SERVER_PID=$!
+# Start Vite and open browser immediately
+echo "🌐 Launching game..."
+npx vite --open
 
-# Wait a moment for the server to initialize
-sleep 2
-
-# Open the browser
-echo "🌐 Opening game in browser..."
-open http://localhost:5173
-
-echo "✨ Game launched successfully!"
-echo "💡 Game is running in your browser. This window can be minimized."
-echo "💡 Close this window when you're done playing to stop the server."
-
-# Wait for this script to be terminated
-wait $SERVER_PID
-
-# Clean up when the script is terminated
-echo "🛑 Game server stopped."
-exit 0 
+# The script will naturally exit when Vite exits
+echo "✨ Thanks for playing Luminor!" 

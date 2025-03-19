@@ -7,14 +7,18 @@ import * as THREE from 'three';
 
 // Player configuration
 const PLAYER_SEGMENT_SIZE = 2.0;    // Increased segment size for visibility on much larger planet
-const PLAYER_SPEED = 1;           // Increased speed for the larger planet
-const PLAYER_TURN_SPEED = 0.03;     // Smoother turning
-const MIN_SEGMENT_DISTANCE = 2.0;   // Increased minimum distance between segments
+const PLAYER_SPEED = 1;             // Speed for the larger planet
+const PLAYER_TURN_SPEED = 0.009;     // Smoother turning
+const MIN_SEGMENT_DISTANCE = 2.0;   // Minimum distance between segments
 const MAX_SEGMENT_DISTANCE = 3.0;   // Maximum distance between segments (to prevent gaps)
 const GLOW_INTENSITY = 1.8;         // Increase glow for better visibility
-const HOVER_HEIGHT = 2.0;           // Increased hover height for larger terrain features
-const HOVER_SMOOTHNESS = 0.1;       // Lower = smoother hover movement
-const HOVER_WOBBLE = 0.3;           // Amount of random wobble for more natural hovering
+const HOVER_HEIGHT = 7.0;           // INCREASED to handle more dramatic terrain features
+const HOVER_SMOOTHNESS = 0.08;      // DECREASED for smoother transitions over extreme terrain
+const HOVER_WOBBLE = 0.6;           // INCREASED for more visible hovering movement
+
+// Debug visualization settings
+const DEBUG_ALIGNMENT = true;        // Enable debug alignment indicators
+const ALIGNMENT_LINE_LENGTH = 10;    // Length of the alignment indicator lines
 
 /**
  * Create and setup the player entity
@@ -49,6 +53,38 @@ export function setupPlayer(scene, planet, camera) {
     
     // Direction the player is moving
     let currentDirection = new THREE.Vector3(0, 0, 1).normalize();
+    
+    // Setup debug visualization objects
+    let surfaceNormalLine, directionLine, rightLine;
+    
+    if (DEBUG_ALIGNMENT) {
+        // Create line showing normal (up) direction - RED
+        const normalMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+        const normalGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, ALIGNMENT_LINE_LENGTH, 0)
+        ]);
+        surfaceNormalLine = new THREE.Line(normalGeometry, normalMaterial);
+        scene.add(surfaceNormalLine);
+        
+        // Create line showing forward direction - GREEN
+        const directionMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
+        const directionGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, 0, ALIGNMENT_LINE_LENGTH)
+        ]);
+        directionLine = new THREE.Line(directionGeometry, directionMaterial);
+        scene.add(directionLine);
+        
+        // Create line showing right direction - BLUE
+        const rightMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
+        const rightGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(ALIGNMENT_LINE_LENGTH, 0, 0)
+        ]);
+        rightLine = new THREE.Line(rightGeometry, rightMaterial);
+        scene.add(rightLine);
+    }
     
     // Keyboard state
     const keys = {
@@ -233,6 +269,34 @@ export function setupPlayer(scene, planet, camera) {
             head.position.copy(hoverPosition);
             head.mesh.position.copy(hoverPosition);
             
+            // Update debug visualization if enabled
+            if (DEBUG_ALIGNMENT && surfaceNormalLine && directionLine && rightLine) {
+                // Position all lines at player head
+                surfaceNormalLine.position.copy(head.position);
+                directionLine.position.copy(head.position);
+                rightLine.position.copy(head.position);
+                
+                // Update line directions
+                // Reset geometries
+                const normalPoints = [
+                    new THREE.Vector3(0, 0, 0),
+                    surfaceNormal.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                ];
+                surfaceNormalLine.geometry.setFromPoints(normalPoints);
+                
+                const dirPoints = [
+                    new THREE.Vector3(0, 0, 0),
+                    currentDirection.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                ];
+                directionLine.geometry.setFromPoints(dirPoints);
+                
+                const rightPoints = [
+                    new THREE.Vector3(0, 0, 0),
+                    right.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                ];
+                rightLine.geometry.setFromPoints(rightPoints);
+            }
+            
             // Update segment positions with simplified following
             for (let i = 1; i < segments.length; i++) {
                 const segment = segments[i];
@@ -321,26 +385,6 @@ export function setupPlayer(scene, planet, camera) {
         checkSelfCollision: function() {
             // Disable self-collision as requested
             return false;
-            
-            /* Original code (commented out)
-            if (segments.length < 5) return false; // Need at least 5 segments for self-collision
-            
-            const head = segments[0];
-            const headPosition = head.position;
-            
-            // Check against all segments except the closest ones
-            for (let i = 4; i < segments.length; i++) {
-                const segment = segments[i];
-                const distance = headPosition.distanceTo(segment.position);
-                
-                // If the head is too close to any segment, it's a collision
-                if (distance < PLAYER_SEGMENT_SIZE * 1.5) {
-                    return true;
-                }
-            }
-            
-            return false;
-            */
         },
         
         // Get the head position
@@ -361,6 +405,25 @@ export function setupPlayer(scene, planet, camera) {
             
             // Clear position history
             positionHistory.length = 0;
+            
+            // Remove debug visualization if enabled
+            if (DEBUG_ALIGNMENT) {
+                if (surfaceNormalLine) {
+                    scene.remove(surfaceNormalLine);
+                    surfaceNormalLine.geometry.dispose();
+                    surfaceNormalLine.material.dispose();
+                }
+                if (directionLine) {
+                    scene.remove(directionLine);
+                    directionLine.geometry.dispose();
+                    directionLine.material.dispose();
+                }
+                if (rightLine) {
+                    scene.remove(rightLine);
+                    rightLine.geometry.dispose();
+                    rightLine.material.dispose();
+                }
+            }
         }
     };
 }

@@ -10,11 +10,22 @@ Luminor is an innovative web-based game that leverages the power of Three.js to 
 
 - Three.js for 3D rendering
 - Web technologies (HTML5, CSS3, JavaScript)
-- More technologies will be added as the project evolves
+- Vite for development and building
+
+## How to Play
+
+1. Make sure you have Node.js installed on your system
+2. Double-click the `Luminor.command` file to start the game
+3. The game will open automatically in your default browser
+4. When you're done playing, simply close the terminal window
 
 ## Development Status
 
-This project is currently in its initial development phase. Stay tuned for updates!
+This project is currently in active development. Features include:
+- Procedurally generated spherical world
+- Dynamic lighting system
+- Resource collection mechanics
+- Smooth player controls
 
 ## License
 
