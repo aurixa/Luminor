@@ -7,8 +7,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createPlanet } from './planet.js';
 import { setupPlayer } from './player.js';
+import { setupPhysicsPlayer } from './physicsPlayer.js';
 import { setupResources } from './resources.js';
+import { PhysicsWorld } from './physics/PhysicsWorld.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
+
+// Use physics-based player
+const USE_PHYSICS = true;
 
 // Main game state
 const gameState = {
@@ -17,18 +22,65 @@ const gameState = {
     playerLength: 1,
 };
 
+// Clear any existing console logs
+console.clear();
+
+console.log("========== LUMINOR GAME ==========");
+console.log("Welcome to Luminor - Dark Orbit");
+console.log("Game initializing...");
+
+// Check THREE.js status
+if (typeof THREE === 'undefined') {
+    console.error("THREE.js not found! Game cannot run without THREE.js");
+    createFallbackScene("THREE.js library could not be loaded.");
+    throw new Error("THREE.js not found");
+} else {
+    console.log("THREE.js loaded successfully (version: " + THREE.REVISION + ")");
+}
+
+// Check SimplexNoise status - look in both global and window scope
+const SimplexNoiseImpl = typeof SimplexNoise !== 'undefined' ? SimplexNoise : 
+                        (typeof window !== 'undefined' && window.SimplexNoise ? window.SimplexNoise : null);
+
+if (!SimplexNoiseImpl) {
+    console.error("SimplexNoise not found! Cannot generate terrain.");
+    createFallbackScene("SimplexNoise library could not be loaded.");
+    throw new Error("SimplexNoise not found");
+} else {
+    console.log("SimplexNoise implementation found");
+    try {
+        const testNoise = new SimplexNoiseImpl();
+        const testValue = testNoise.noise3d(1, 2, 3);
+        if (typeof testValue !== 'number' || isNaN(testValue)) {
+            throw new Error("Invalid noise value: " + testValue);
+        }
+        console.log("SimplexNoise test successful");
+        // Make it globally available
+        window.SimplexNoise = SimplexNoiseImpl;
+    } catch (e) {
+        console.error("Error testing SimplexNoise:", e);
+        createFallbackScene("Error testing SimplexNoise: " + e.message);
+        throw e;
+    }
+}
+
 // Initialize Three.js scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000011); // Dark blue background
+console.log("Scene created");
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+console.log("Camera created with FOV:", camera.fov);
+
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 document.body.appendChild(renderer.domElement);
+console.log("Renderer created and added to DOM");
 
-// Setup camera position
-camera.position.z = 15;
+// Position camera much closer - only 100 units away
+camera.position.set(0, 0, 150);
+camera.lookAt(0, 0, 0);
 
 // Camera configuration
 const CAMERA_DISTANCE = 60;    // Increased distance to see more of the terrain
@@ -75,7 +127,7 @@ function setupDebugControls() {
 }
 
 // Create the planet
-const planet = createPlanet(scene);
+let planet = createPlanet(scene);
 
 // Initialize game elements
 let player = null;
@@ -301,53 +353,78 @@ function createStarField() {
     return starField;
 }
 
-// Animation loop
+/**
+ * Animation loop
+ */
 function animate() {
-    const currentTime = Date.now();
-    const deltaTime = currentTime - (lastTime || currentTime);
-    lastTime = currentTime;
-    
     requestAnimationFrame(animate);
     
-    if (stats) stats.update();
+    stats.begin();
     
-    if (orbitControls && orbitControls.enabled) {
-        orbitControls.update();
-    }
-    
-    // Slight starfield rotation for subtle effect
-    if (starField) {
-        starField.rotation.y += 0.00001 * deltaTime;
-    }
-    
-    if (gameState.isPlaying && player) {
-        // Update player and get its current state
-        const playerState = player.update();
+    // Update game logic if playing
+    if (gameState.isPlaying && player && resources) {
+        // Calculate delta time for smooth animation
+        const now = performance.now();
+        const deltaTime = now - (lastTime || now);
+        lastTime = now;
         
-        // Update camera position based on current mode
+        // Get current player state for camera
+        let playerState;
+        
+        // Update player - different update methods for physics vs standard player
+        if (USE_PHYSICS) {
+            // Physics player returns the player state directly
+            playerState = player.update(deltaTime / 1000); // Convert to seconds for physics
+        } else {
+            // Standard player needs to be queried for state
+            player.update();
+            playerState = {
+                position: player.getHeadPosition(),
+                direction: player.getCurrentDirection(),
+                up: player.getHeadPosition().clone().normalize()
+            };
+        }
+        
+        // Update camera position to follow player
         updateCameraPosition(playerState);
         
-        // Update resources if they exist
-        if (resources) {
-            resources.update();
-            
-            // Check for resource collection
-            const collected = resources.checkCollisions(player);
-            if (collected > 0) {
-                // Increase score and grow player
-                gameState.score += collected;
-                scoreDisplay.textContent = `Score: ${gameState.score}`;
-                player.grow(collected);
+        // Update resources
+        resources.update(deltaTime);
+        
+        // Check for resource collection
+        for (let i = 0; i < resources.items.length; i++) {
+            const resource = resources.items[i];
+            if (resource.active && player.checkCollision(resource.position, resource.radius)) {
+                // Collect the resource
+                resource.collect();
+                
+                // Increment score
+                gameState.score += 10;
+                
+                // Update the score display
+                updateScoreDisplay();
+                
+                // Grow the player
+                if (gameState.score % 30 === 0) { // Grow every 3 resources
+                    player.addSegment();
+                    gameState.playerLength = player.length;
+                }
             }
         }
         
-        // Check self-collision (game over condition)
-        if (player.checkSelfCollision()) {
-            endGame();
+        // Update clouds
+        if (planet && planet.clouds) {
+            planet.clouds.rotation.y += 0.0001;
         }
+    } else if (orbitControls) {
+        // Update orbit controls when not playing
+        orbitControls.update();
     }
     
+    // Render the scene
     renderer.render(scene, camera);
+    
+    stats.end();
 }
 
 // Store last time for deltaTime calculation
@@ -456,57 +533,67 @@ function updateCameraPosition(playerState) {
     camera.up.copy(up);
 }
 
-// Start the game
+/**
+ * Start the game
+ */
 function startGame() {
-    // Reset game state
-    gameState.isPlaying = true;
-    gameState.score = 0;
-    gameState.playerLength = 1;
-    
-    // Hide loading/start screen if it exists
+    // Hide loading screen and button if they exist
     const loadingScreen = document.getElementById('loading-screen');
     if (loadingScreen) {
         loadingScreen.style.display = 'none';
     }
     
-    // Show controls info
-    controlsInfo.style.display = 'block';
+    // Remove any debug fallback content
+    const fallbackContent = document.getElementById('fallback-content');
+    if (fallbackContent) {
+        fallbackContent.style.display = 'none';
+    }
     
-    // Show score display
-    scoreDisplay.textContent = `Score: ${gameState.score}`;
+    // Show game UI elements
+    controlsInfo.style.display = 'block';
     scoreDisplay.style.display = 'block';
     
-    // Disable orbit controls during gameplay
+    // Reset game state
+    gameState.isPlaying = true;
+    gameState.score = 0;
+    gameState.playerLength = 1;
+    
+    // Disable orbit controls
     if (orbitControls) {
         orbitControls.enabled = false;
     }
     
-    // Remove old player if it exists
+    // Create physics world
+    let physicsWorld = null;
+    if (USE_PHYSICS) {
+        physicsWorld = new PhysicsWorld();
+        console.log("Physics world created");
+    }
+    
+    // Create player using the appropriate player setup function
     if (player) {
-        player.remove();
+        player.reset();
+    } else {
+        if (USE_PHYSICS) {
+            // Use physics-based player
+            player = setupPhysicsPlayer(scene, planet, camera, physicsWorld);
+        } else {
+            // Use standard player
+            player = setupPlayer(scene, planet, camera);
+        }
     }
     
-    // Remove old resources if they exist
-    if (resources) {
-        resources.remove();
+    // Create resources
+    if (!resources) {
+        resources = setupResources(scene, planet);
+    } else {
+        resources.reset();
     }
     
-    // Create new player
-    player = setupPlayer(scene, planet, camera);
+    // Update score display
+    updateScoreDisplay();
     
-    // Create new resources
-    resources = setupResources(scene, planet);
-    
-    // Add initial segments
-    player.grow(2); // Start with 3 segments total
-    
-    // Set initial camera position
-    const playerState = {
-        position: player.getHeadPosition(),
-        direction: new THREE.Vector3(0, 0, 1),
-        up: player.getHeadPosition().clone().normalize()
-    };
-    updateCameraPosition(playerState);
+    console.log("Game started!");
 }
 
 // End the game
@@ -524,9 +611,6 @@ function endGame() {
     
     alert(`Game Over! Score: ${gameState.score}`);
 }
-
-// Start animation loop
-animate();
 
 // Setup terrain panel
 function setupTerrainPanelControls() {
@@ -594,4 +678,25 @@ function setupTerrainPanelControls() {
         document.getElementById('small-scale').value = 0.1;
         document.getElementById('small-scale-value').textContent = 0.1;
     });
-} 
+}
+
+/**
+ * Update the score display
+ */
+function updateScoreDisplay() {
+    scoreDisplay.textContent = `Score: ${gameState.score}`;
+}
+
+// Start animation loop
+console.log("Starting animation loop");
+animate();
+
+// On window load, start the game
+window.addEventListener('load', function() {
+    console.log("Window loaded, starting game...");
+    
+    // Start the game after a short delay to ensure everything is loaded
+    setTimeout(() => {
+        startGame();
+    }, 500);
+}); 
