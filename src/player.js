@@ -6,11 +6,15 @@
 import * as THREE from 'three';
 
 // Player configuration
-const PLAYER_SEGMENT_SIZE = 0.3;
-const PLAYER_SPEED = 0.08;        // Slightly slower for better control
-const PLAYER_TURN_SPEED = 0.03;   // Smoother turning
-const MIN_SEGMENT_DISTANCE = 0.3; // Slightly closer segments for better visuals
-const GLOW_INTENSITY = 1.8;       // Increase glow for better visibility
+const PLAYER_SEGMENT_SIZE = 2.0;    // Increased segment size for visibility on much larger planet
+const PLAYER_SPEED = 1;           // Increased speed for the larger planet
+const PLAYER_TURN_SPEED = 0.03;     // Smoother turning
+const MIN_SEGMENT_DISTANCE = 2.0;   // Increased minimum distance between segments
+const MAX_SEGMENT_DISTANCE = 3.0;   // Maximum distance between segments (to prevent gaps)
+const GLOW_INTENSITY = 1.8;         // Increase glow for better visibility
+const HOVER_HEIGHT = 2.0;           // Increased hover height for larger terrain features
+const HOVER_SMOOTHNESS = 0.1;       // Lower = smoother hover movement
+const HOVER_WOBBLE = 0.3;           // Amount of random wobble for more natural hovering
 
 /**
  * Create and setup the player entity
@@ -30,14 +34,16 @@ export function setupPlayer(scene, planet, camera) {
     const headMesh = new THREE.Mesh(headGeometry, headMaterial);
     
     // Set initial position on the light side of the planet
-    const initialPosition = new THREE.Vector3(planet.radius, 0, 0);
+    const initialPosition = new THREE.Vector3(planet.radius + HOVER_HEIGHT, 0, 0);
     headMesh.position.copy(initialPosition);
     scene.add(headMesh);
     
     // Add the head as the first segment
     segments.push({
         position: initialPosition.clone(),
-        mesh: headMesh
+        mesh: headMesh,
+        hoverPhase: Math.random() * Math.PI * 2,  // Random starting phase for hover wobble
+        hoverSpeed: 0.5 + Math.random() * 0.5     // Random hover speed
     });
     segmentMeshes.push(headMesh);
     
@@ -148,6 +154,33 @@ export function setupPlayer(scene, planet, camera) {
     // Create trail effect
     const trail = addTrailEffect();
     
+    // Store previous positions for each segment to create a smoother following effect
+    const positionHistory = [];
+    const HISTORY_LENGTH = 10; // Number of positions to remember per segment
+    
+    // Track time for hover effect
+    let time = 0;
+    
+    // Apply hover effect to position - makes the player float above terrain
+    function applyHoverEffect(basePosition, segment, deltaTime) {
+        // Update hover phase
+        segment.hoverPhase += deltaTime * 0.001 * segment.hoverSpeed;
+        
+        // Get the normal to the planet surface at this position
+        const surfaceNormal = basePosition.clone().normalize();
+        
+        // Calculate hover position with minimal wobble
+        const hoverWobble = Math.sin(segment.hoverPhase) * HOVER_WOBBLE;
+        const hoverDist = HOVER_HEIGHT + hoverWobble;
+        
+        // Apply hover distance along normal
+        const hoverPosition = basePosition.clone().add(
+            surfaceNormal.multiplyScalar(hoverDist)
+        );
+        
+        return hoverPosition;
+    }
+    
     // Player object with properties and methods
     return {
         segments,
@@ -156,32 +189,27 @@ export function setupPlayer(scene, planet, camera) {
         
         // Update the player's position and segments
         update: function() {
+            // Update time
+            time += 1/60; // Assume 60fps
+            
             // Get the head segment
             const head = segments[0];
             
+            // Calculate the up vector (normal to planet surface at player position)
+            const up = head.position.clone().normalize();
+            
             // Apply steering based on keyboard input
             if (keys.left) {
-                // Calculate right vector for steering left
-                const up = head.position.clone().normalize(); // Up is toward planet center
-                const right = new THREE.Vector3().crossVectors(currentDirection, up);
-                
-                // Rotate currentDirection around the up vector
-                currentDirection.applyAxisAngle(up, -PLAYER_TURN_SPEED);
-                currentDirection.normalize();
-            }
-            
-            if (keys.right) {
-                // Calculate right vector for steering right
-                const up = head.position.clone().normalize(); // Up is toward planet center
-                const right = new THREE.Vector3().crossVectors(currentDirection, up);
-                
                 // Rotate currentDirection around the up vector
                 currentDirection.applyAxisAngle(up, PLAYER_TURN_SPEED);
                 currentDirection.normalize();
             }
             
-            // Calculate the up vector (normal to planet surface at player position)
-            const up = head.position.clone().normalize();
+            if (keys.right) {
+                // Rotate currentDirection around the up vector
+                currentDirection.applyAxisAngle(up, -PLAYER_TURN_SPEED);
+                currentDirection.normalize();
+            }
             
             // Calculate right vector
             const right = new THREE.Vector3().crossVectors(currentDirection, up).normalize();
@@ -194,37 +222,50 @@ export function setupPlayer(scene, planet, camera) {
                 currentDirection.clone().multiplyScalar(PLAYER_SPEED)
             );
             
-            // Project onto planet surface
-            const surfacePosition = planet.getNearestPointOnSurface(newPosition);
-            head.position.copy(surfacePosition);
-            head.mesh.position.copy(surfacePosition);
+            // Project to planet surface and add hover height
+            const surfacePoint = planet.getNearestPointOnSurface(newPosition);
+            const surfaceNormal = surfacePoint.clone().normalize();
+            const hoverPosition = surfacePoint.clone().add(
+                surfaceNormal.multiplyScalar(HOVER_HEIGHT)
+            );
             
-            // Update segment positions (follow the leader)
+            // Update head position
+            head.position.copy(hoverPosition);
+            head.mesh.position.copy(hoverPosition);
+            
+            // Update segment positions with simplified following
             for (let i = 1; i < segments.length; i++) {
                 const segment = segments[i];
                 const prevSegment = segments[i - 1];
                 
-                // Direction from this segment to the one in front
-                const dirToNext = prevSegment.position.clone().sub(segment.position).normalize();
+                // Direction to previous segment
+                const direction = prevSegment.position.clone().sub(segment.position).normalize();
                 
-                // Distance to the segment in front
-                const distToNext = segment.position.distanceTo(prevSegment.position);
+                // Target position (at fixed distance from previous segment)
+                const targetPosition = prevSegment.position.clone().sub(
+                    direction.multiplyScalar(MIN_SEGMENT_DISTANCE * 1.2)
+                );
                 
-                // If the segment is too close, don't move it
-                if (distToNext < MIN_SEGMENT_DISTANCE) continue;
+                // Update position
+                segment.position.lerp(targetPosition, 0.3);
+                segment.mesh.position.copy(segment.position);
                 
-                // Move segment toward the one in front
-                const moveAmount = Math.min(PLAYER_SPEED * 0.9, distToNext - MIN_SEGMENT_DISTANCE);
-                segment.position.add(dirToNext.multiplyScalar(moveAmount));
+                // Orient segment to face next segment
+                if (i < segments.length - 1) {
+                    const nextSegment = segments[i + 1];
+                    segment.mesh.lookAt(nextSegment.position);
+                } else {
+                    const prevSegment = segments[i - 1];
+                    const lookDir = segment.position.clone().sub(prevSegment.position).normalize();
+                    segment.mesh.lookAt(segment.position.clone().add(lookDir));
+                }
                 
-                // Project onto planet surface
-                const segmentSurfacePosition = planet.getNearestPointOnSurface(segment.position);
-                segment.position.copy(segmentSurfacePosition);
-                segment.mesh.position.copy(segmentSurfacePosition);
+                // Set up direction
+                const segmentUp = segment.position.clone().normalize();
+                segment.mesh.up.copy(segmentUp);
             }
             
             // Update head orientation to face direction of movement
-            // Create a lookAt matrix based on current direction and up vector
             const lookTarget = head.position.clone().add(currentDirection);
             headMesh.lookAt(lookTarget);
             headMesh.up.copy(up);
@@ -257,9 +298,20 @@ export function setupPlayer(scene, planet, camera) {
                 // Add the new segment
                 segments.push({
                     position: newPosition.clone(),
-                    mesh: segmentMesh
+                    mesh: segmentMesh,
+                    hoverPhase: Math.random() * Math.PI * 2,  // Random starting phase
+                    hoverSpeed: 0.5 + Math.random() * 0.5     // Random speed
                 });
                 segmentMeshes.push(segmentMesh);
+                
+                // Initialize position history for new segment
+                const segmentIndex = segments.length - 1;
+                positionHistory[segmentIndex] = [];
+                
+                // Fill with current position
+                for (let j = 0; j < HISTORY_LENGTH; j++) {
+                    positionHistory[segmentIndex].push(newPosition.clone());
+                }
             }
             
             this.length += amount;
@@ -267,6 +319,10 @@ export function setupPlayer(scene, planet, camera) {
         
         // Check if the player has collided with itself
         checkSelfCollision: function() {
+            // Disable self-collision as requested
+            return false;
+            
+            /* Original code (commented out)
             if (segments.length < 5) return false; // Need at least 5 segments for self-collision
             
             const head = segments[0];
@@ -284,6 +340,7 @@ export function setupPlayer(scene, planet, camera) {
             }
             
             return false;
+            */
         },
         
         // Get the head position
@@ -301,6 +358,9 @@ export function setupPlayer(scene, planet, camera) {
             trail.clear();
             segments.length = 0;
             segmentMeshes.length = 0;
+            
+            // Clear position history
+            positionHistory.length = 0;
         }
     };
 }

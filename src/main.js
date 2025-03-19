@@ -31,34 +31,35 @@ document.body.appendChild(renderer.domElement);
 camera.position.z = 15;
 
 // Camera configuration
-const CAMERA_DISTANCE = 5; // Distance from player
-const CAMERA_HEIGHT = 2.5; // Height above player
-const CAMERA_SMOOTHNESS = 0.05; // Lower = smoother but slower camera
+const CAMERA_DISTANCE = 18;    // Increased distance from player for better visibility
+const CAMERA_HEIGHT = 35;      // Increased height for better terrain visibility
+const CAMERA_SMOOTHNESS = 0.1; // Increased for more responsive camera following
+const CAMERA_FORWARD_OFFSET = 10; // Reduced to look closer to the player
 
 // Add ambient light for base illumination
-const ambientLight = new THREE.AmbientLight(0x333344, 0.3);
+const ambientLight = new THREE.AmbientLight(0x666666, 0.7); // Brighter ambient for better terrain visibility
 scene.add(ambientLight);
 
 // Add directional light (sun)
-const sunLight = new THREE.DirectionalLight(0xffffaa, 1.2);
-sunLight.position.set(50, 30, 50);
+const sunLight = new THREE.DirectionalLight(0xffffdd, 1.4); // Warmer sunlight
+sunLight.position.set(200, 100, 200); // Position further away for the larger planet
 sunLight.castShadow = true;
 
-// Optimize shadow settings
-sunLight.shadow.mapSize.width = 2048;
-sunLight.shadow.mapSize.height = 2048;
+// Optimize shadow settings for larger planet
+sunLight.shadow.mapSize.width = 4096;
+sunLight.shadow.mapSize.height = 4096;
 sunLight.shadow.camera.near = 0.5;
-sunLight.shadow.camera.far = 500;
-sunLight.shadow.camera.left = -35;
-sunLight.shadow.camera.right = 35;
-sunLight.shadow.camera.top = 35;
-sunLight.shadow.camera.bottom = -35;
-sunLight.shadow.bias = -0.0005;
+sunLight.shadow.camera.far = 1000;
+sunLight.shadow.camera.left = -150;
+sunLight.shadow.camera.right = 150;
+sunLight.shadow.camera.top = 150;
+sunLight.shadow.camera.bottom = -150;
+sunLight.shadow.bias = -0.0001;
 
 scene.add(sunLight);
 
 // Add a subtle point light at the camera for better visibility
-const cameraLight = new THREE.PointLight(0x3333ff, 0.5);
+const cameraLight = new THREE.PointLight(0xffffee, 0.7);
 camera.add(cameraLight);
 scene.add(camera);
 
@@ -100,25 +101,39 @@ window.addEventListener('resize', () => {
 });
 
 // Create starfield
-createStarField();
+const starField = createStarField();
 
 // Add stats for debugging
 const stats = new Stats();
 document.body.appendChild(stats.dom);
 
-// UI elements
-let startButton = null;
-let restartButton = null;
+// Controls info display
+const controlsInfo = document.createElement('div');
+controlsInfo.style.position = 'absolute';
+controlsInfo.style.bottom = '20px';
+controlsInfo.style.left = '20px';
+controlsInfo.style.color = 'white';
+controlsInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+controlsInfo.style.padding = '10px';
+controlsInfo.style.borderRadius = '5px';
+controlsInfo.style.fontFamily = 'Arial, sans-serif';
+controlsInfo.style.display = 'none';
+controlsInfo.innerHTML = `
+<h3>Controls:</h3>
+<p>← Left Arrow / A: Turn Left</p>
+<p>→ Right Arrow / D: Turn Right</p>
+`;
+document.body.appendChild(controlsInfo);
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Setup UI interaction
-    startButton = document.getElementById('start-button');
+    const startButton = document.getElementById('start-button');
     if (startButton) {
         startButton.addEventListener('click', startGame);
     }
     
-    restartButton = document.getElementById('restart-button');
+    const restartButton = document.getElementById('restart-button');
     if (restartButton) {
         restartButton.addEventListener('click', startGame);
     }
@@ -128,22 +143,26 @@ document.addEventListener('DOMContentLoaded', () => {
  * Create a star field background
  */
 function createStarField() {
-    const starCount = 2000;
+    const starCount = 4000;
     const starGeometry = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
     const starColors = new Float32Array(starCount * 3);
+    const starSizes = new Float32Array(starCount);
     
     for (let i = 0; i < starCount; i++) {
         const i3 = i * 3;
         
         // Position stars in a sphere around the scene
-        const radius = THREE.MathUtils.randFloat(50, 150);
+        const radius = THREE.MathUtils.randFloat(300, 900);
         const theta = THREE.MathUtils.randFloat(0, Math.PI * 2);
         const phi = THREE.MathUtils.randFloat(0, Math.PI);
         
         starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
         starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
         starPositions[i3 + 2] = radius * Math.cos(phi);
+        
+        // Vary star sizes
+        starSizes[i] = THREE.MathUtils.randFloat(0.1, 1.0);
         
         // Vary star colors
         const colorChoice = Math.random();
@@ -157,30 +176,43 @@ function createStarField() {
             starColors[i3] = THREE.MathUtils.randFloat(0.9, 1.0);
             starColors[i3 + 1] = THREE.MathUtils.randFloat(0.6, 0.9);
             starColors[i3 + 2] = THREE.MathUtils.randFloat(0.1, 0.4);
-        } else {
+        } else if (colorChoice < 0.95) {
             // Red stars
             starColors[i3] = THREE.MathUtils.randFloat(0.8, 1.0);
             starColors[i3 + 1] = THREE.MathUtils.randFloat(0.1, 0.5);
             starColors[i3 + 2] = THREE.MathUtils.randFloat(0.1, 0.3);
+        } else {
+            // A few bright blue stars
+            starColors[i3] = THREE.MathUtils.randFloat(0.3, 0.6);
+            starColors[i3 + 1] = THREE.MathUtils.randFloat(0.7, 0.9);
+            starColors[i3 + 2] = THREE.MathUtils.randFloat(0.9, 1.0);
         }
     }
     
     starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+    starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
     
     const starMaterial = new THREE.PointsMaterial({
-        size: 0.15,
+        size: 0.5,
         vertexColors: true,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
+        sizeAttenuation: true
     });
     
     const starField = new THREE.Points(starGeometry, starMaterial);
     scene.add(starField);
+    
+    return starField;
 }
 
 // Animation loop
 function animate() {
+    const currentTime = Date.now();
+    const deltaTime = currentTime - (lastTime || currentTime);
+    lastTime = currentTime;
+    
     requestAnimationFrame(animate);
     
     if (stats) stats.update();
@@ -189,11 +221,16 @@ function animate() {
         orbitControls.update();
     }
     
+    // Slight starfield rotation for subtle effect
+    if (starField) {
+        starField.rotation.y += 0.00001 * deltaTime;
+    }
+    
     if (gameState.isPlaying && player) {
         // Update player and get its current state
         const playerState = player.update();
         
-        // Update third person camera position
+        // Update camera position based on current mode
         updateCameraPosition(playerState);
         
         // Update resources if they exist
@@ -219,25 +256,37 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+// Store last time for deltaTime calculation
+let lastTime = null;
+
 /**
- * Update camera position to follow player in third-person view
+ * Update camera position to follow player
  */
 function updateCameraPosition(playerState) {
     if (!playerState) return;
     
-    // Calculate ideal camera position (behind and above player)
-    const idealPosition = playerState.position.clone()
-        .sub(playerState.direction.clone().multiplyScalar(CAMERA_DISTANCE)) // Move backward from player
-        .add(playerState.up.clone().multiplyScalar(CAMERA_HEIGHT));         // Move up from player
+    // Make sure the camera stays behind the player (reverse direction for camera position calculation)
+    const cameraDirection = playerState.direction.clone().negate();
     
-    // Smoothly interpolate current camera position toward ideal position
+    // Get the up vector (normal to planet surface at player position)
+    const up = playerState.position.clone().normalize();
+    
+    // Create a position behind and above the player
+    const idealPosition = playerState.position.clone()
+        .add(cameraDirection.multiplyScalar(CAMERA_DISTANCE))
+        .add(up.multiplyScalar(CAMERA_HEIGHT));
+    
+    // Smooth transition to ideal camera position
     camera.position.lerp(idealPosition, CAMERA_SMOOTHNESS);
     
-    // Make camera look at player position
-    camera.lookAt(playerState.position);
+    // Look at player position plus a small offset in the direction of travel
+    const lookTarget = playerState.position.clone().add(
+        playerState.direction.clone().multiplyScalar(CAMERA_FORWARD_OFFSET)
+    );
+    camera.lookAt(lookTarget);
     
     // Set camera up direction to match planet normal at player position
-    camera.up.copy(playerState.up);
+    camera.up.copy(up);
 }
 
 // Start the game
@@ -254,10 +303,7 @@ function startGame() {
     }
     
     // Show controls info
-    const controlsInfo = document.getElementById('controls-info');
-    if (controlsInfo) {
-        controlsInfo.style.display = 'block';
-    }
+    controlsInfo.style.display = 'block';
     
     // Show score display
     scoreDisplay.textContent = `Score: ${gameState.score}`;
@@ -307,6 +353,7 @@ function endGame() {
     
     // Hide score display
     scoreDisplay.style.display = 'none';
+    controlsInfo.style.display = 'none';
     
     alert(`Game Over! Score: ${gameState.score}`);
 }
