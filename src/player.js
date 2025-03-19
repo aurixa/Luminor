@@ -7,16 +7,16 @@ import * as THREE from 'three';
 
 // Player configuration
 const PLAYER_SEGMENT_SIZE = 0.3;
-const PLAYER_SPEED = 0.1;
-const MIN_SEGMENT_DISTANCE = 0.4;
-const GLOW_INTENSITY = 1.5;
-const MAX_TURN_ANGLE = Math.PI / 30; // Max angle for smooth turning
+const PLAYER_SPEED = 0.08;        // Slightly slower for better control
+const PLAYER_TURN_SPEED = 0.03;   // Smoother turning
+const MIN_SEGMENT_DISTANCE = 0.3; // Slightly closer segments for better visuals
+const GLOW_INTENSITY = 1.8;       // Increase glow for better visibility
 
 /**
  * Create and setup the player entity
  * @param {THREE.Scene} scene - The Three.js scene
  * @param {Object} planet - The planet object
- * @param {THREE.Camera} camera - The camera for tracking mouse position
+ * @param {THREE.Camera} camera - The camera for tracking
  * @returns {Object} The player object with properties and methods
  */
 export function setupPlayer(scene, planet, camera) {
@@ -41,52 +41,112 @@ export function setupPlayer(scene, planet, camera) {
     });
     segmentMeshes.push(headMesh);
     
-    // Target for the player to move towards (will be set by mouse movement)
-    let targetPosition = initialPosition.clone();
-    
     // Direction the player is moving
     let currentDirection = new THREE.Vector3(0, 0, 1).normalize();
     
-    // Setup mouse movement tracking
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+    // Keyboard state
+    const keys = {
+        left: false,
+        right: false
+    };
     
-    window.addEventListener('mousemove', (event) => {
-        // Convert mouse position to normalized device coordinates
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObject(planet.mesh);
-        
-        // If we intersected with the planet, set that as the target
-        if (intersects.length > 0) {
-            targetPosition = intersects[0].point;
+    // Setup keyboard controls
+    window.addEventListener('keydown', (event) => {
+        switch(event.key) {
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                keys.left = true;
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                keys.right = true;
+                break;
         }
     });
     
-    // Handle touch events for mobile
-    window.addEventListener('touchmove', (event) => {
-        event.preventDefault();
-        
-        // Convert touch position to normalized device coordinates
-        mouse.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObject(planet.mesh);
-        
-        // If we intersected with the planet, set that as the target
-        if (intersects.length > 0) {
-            targetPosition = intersects[0].point;
+    window.addEventListener('keyup', (event) => {
+        switch(event.key) {
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                keys.left = false;
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                keys.right = false;
+                break;
         }
-    }, { passive: false });
+    });
+    
+    // Add a trail effect for the player
+    function addTrailEffect() {
+        // Create a trail that follows the player's path
+        const trailMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffaa,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.DoubleSide
+        });
+        
+        // We'll create small discs that fade over time
+        return {
+            particles: [],
+            update: function() {
+                // Add new trail particles occasionally
+                if (segments.length > 0 && Math.random() > 0.7) {
+                    const lastSegment = segments[segments.length - 1];
+                    
+                    const discGeometry = new THREE.CircleGeometry(PLAYER_SEGMENT_SIZE * 0.8, 8);
+                    const discMesh = new THREE.Mesh(discGeometry, trailMaterial.clone());
+                    
+                    // Position and orient disc
+                    discMesh.position.copy(lastSegment.position);
+                    const normal = lastSegment.position.clone().normalize();
+                    discMesh.lookAt(new THREE.Vector3(0, 0, 0));
+                    
+                    scene.add(discMesh);
+                    
+                    this.particles.push({
+                        mesh: discMesh,
+                        life: 1.0  // Life decreases over time
+                    });
+                }
+                
+                // Update existing particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    
+                    // Decrease life and opacity
+                    particle.life -= 0.02;
+                    particle.mesh.material.opacity = particle.life * 0.2;
+                    
+                    // Remove dead particles
+                    if (particle.life <= 0) {
+                        scene.remove(particle.mesh);
+                        particle.mesh.geometry.dispose();
+                        particle.mesh.material.dispose();
+                        this.particles.splice(i, 1);
+                    }
+                }
+            },
+            
+            clear: function() {
+                // Remove all trail particles
+                for (const particle of this.particles) {
+                    scene.remove(particle.mesh);
+                    particle.mesh.geometry.dispose();
+                    particle.mesh.material.dispose();
+                }
+                this.particles = [];
+            }
+        };
+    }
+    
+    // Create trail effect
+    const trail = addTrailEffect();
     
     // Player object with properties and methods
     return {
@@ -96,19 +156,38 @@ export function setupPlayer(scene, planet, camera) {
         
         // Update the player's position and segments
         update: function() {
-            // Calculate direction to target
+            // Get the head segment
             const head = segments[0];
-            const dirToTarget = targetPosition.clone().sub(head.position).normalize();
             
-            // Limit turning angle for smooth movement
-            const angle = currentDirection.angleTo(dirToTarget);
-            if (angle > MAX_TURN_ANGLE) {
-                // Lerp direction for smoother turning
-                const t = MAX_TURN_ANGLE / angle;
-                currentDirection.lerp(dirToTarget, t).normalize();
-            } else {
-                currentDirection.copy(dirToTarget);
+            // Apply steering based on keyboard input
+            if (keys.left) {
+                // Calculate right vector for steering left
+                const up = head.position.clone().normalize(); // Up is toward planet center
+                const right = new THREE.Vector3().crossVectors(currentDirection, up);
+                
+                // Rotate currentDirection around the up vector
+                currentDirection.applyAxisAngle(up, -PLAYER_TURN_SPEED);
+                currentDirection.normalize();
             }
+            
+            if (keys.right) {
+                // Calculate right vector for steering right
+                const up = head.position.clone().normalize(); // Up is toward planet center
+                const right = new THREE.Vector3().crossVectors(currentDirection, up);
+                
+                // Rotate currentDirection around the up vector
+                currentDirection.applyAxisAngle(up, PLAYER_TURN_SPEED);
+                currentDirection.normalize();
+            }
+            
+            // Calculate the up vector (normal to planet surface at player position)
+            const up = head.position.clone().normalize();
+            
+            // Calculate right vector
+            const right = new THREE.Vector3().crossVectors(currentDirection, up).normalize();
+            
+            // Recalculate forward direction to ensure it's orthogonal to up
+            currentDirection = new THREE.Vector3().crossVectors(up, right).normalize();
             
             // Move head in the current direction
             const newPosition = head.position.clone().add(
@@ -145,12 +224,20 @@ export function setupPlayer(scene, planet, camera) {
             }
             
             // Update head orientation to face direction of movement
-            if (segments.length > 1) {
-                const lookDir = segments[0].position.clone().sub(segments[1].position).normalize();
-                const up = segments[0].position.clone().normalize(); // Up is toward planet center
-                headMesh.lookAt(segments[0].position.clone().add(lookDir));
-                headMesh.up.copy(up);
-            }
+            // Create a lookAt matrix based on current direction and up vector
+            const lookTarget = head.position.clone().add(currentDirection);
+            headMesh.lookAt(lookTarget);
+            headMesh.up.copy(up);
+            
+            // Update trail effect
+            trail.update();
+            
+            // Return current direction and position for camera positioning
+            return {
+                position: head.position.clone(),
+                direction: currentDirection.clone(),
+                up: up
+            };
         },
         
         // Grow the player by adding segments
@@ -211,6 +298,7 @@ export function setupPlayer(scene, planet, camera) {
                 mesh.geometry.dispose();
                 mesh.material.dispose();
             }
+            trail.clear();
             segments.length = 0;
             segmentMeshes.length = 0;
         }

@@ -1,113 +1,132 @@
 /**
  * Luminor
- * Code written by a mixture of AI (2025)
+ * Resources and collectibles system
  */
 
 import * as THREE from 'three';
 
-// Energy configuration
-const MAX_ENERGY_POINTS = 50;
-const ENERGY_SIZE = 0.2;
-const SPAWN_INTERVAL = 1000; // ms
-const COLLISION_DISTANCE = 0.5;
-const DARK_SIDE_SPAWN_CHANCE = 0.3; // 30% chance on dark side
-const LIGHT_SIDE_SPAWN_CHANCE = 0.7; // 70% chance on light side
+const MAX_RESOURCES = 20;
+const RESOURCE_SIZE = 0.3;
+const RESOURCE_GLOW = 2.0;
+const COLLECTION_DISTANCE = 0.8;
+const SPAWN_INTERVAL = 2000; // ms
+const MIN_SPAWN_DISTANCE = 5;
 
 /**
- * Setup and manage energy collectibles for the game
- * @param {THREE.Scene} scene - The Three.js scene
- * @param {Object} planet - The planet object
- * @returns {Object} Energy manager with properties and methods
+ * Setup the resources system for collectible energy
+ * @param {THREE.Scene} scene 
+ * @param {Object} planet 
+ * @returns {Object} Resources controller
  */
 export function setupResources(scene, planet) {
-    // Store active energy points
     const resources = [];
-    
-    // Last spawn time
     let lastSpawnTime = 0;
     
-    // Create energy geometry (reused for all energy points)
-    const resourceGeometry = new THREE.IcosahedronGeometry(ENERGY_SIZE, 1);
-    
     /**
-     * Create a new energy point at a random position on the planet
+     * Create a glowing energy resource
      */
-    function spawnResource() {
-        if (resources.length >= MAX_ENERGY_POINTS) return;
+    function createResource() {
+        // Create a random position on the planet surface
+        const randomDir = new THREE.Vector3(
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1
+        ).normalize();
         
-        // Generate random point on unit sphere
-        const phi = Math.random() * Math.PI * 2;
-        const theta = Math.acos(2 * Math.random() - 1);
+        const position = planet.getNearestPointOnSurface(randomDir.multiplyScalar(planet.radius));
         
-        const x = Math.sin(theta) * Math.cos(phi);
-        const y = Math.sin(theta) * Math.sin(phi);
-        const z = Math.cos(theta);
-        
-        // Create position vector and project to planet surface
-        const position = new THREE.Vector3(x, y, z);
-        const isLightSide = planet.isInLight(position);
-        
-        // Apply spawn chance based on light/dark side
-        const spawnChance = isLightSide ? LIGHT_SIDE_SPAWN_CHANCE : DARK_SIDE_SPAWN_CHANCE;
-        if (Math.random() > spawnChance) return;
-        
-        // Project to planet surface
-        const surfacePosition = planet.getPositionOnSurface(position);
-        
-        // Create energy with different color based on light/dark side
-        const color = isLightSide ? 0x33ffff : 0xff3366;
-        const intensity = isLightSide ? 1.0 : 1.5; // Darker side energy glows more
-        
-        // Create material
+        // Create resource geometry and material
+        const geometry = new THREE.SphereGeometry(RESOURCE_SIZE, 8, 8);
         const material = new THREE.MeshStandardMaterial({
-            color: color,
-            emissive: color,
-            emissiveIntensity: intensity,
-            transparent: true,
-            opacity: 0.8,
-            metalness: 0.5,
+            color: 0xffaa00,
+            emissive: 0xffaa00,
+            emissiveIntensity: RESOURCE_GLOW,
+            metalness: 0.3,
             roughness: 0.2,
         });
         
         // Create mesh
-        const mesh = new THREE.Mesh(resourceGeometry, material);
-        mesh.position.copy(surfacePosition);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
         scene.add(mesh);
+        
+        // Add pulse animation
+        const pulse = {
+            intensity: RESOURCE_GLOW,
+            phase: Math.random() * Math.PI * 2, // Random starting phase
+            speed: 1.5 + Math.random() * 1.5    // Random speed
+        };
         
         // Add to resources array
         resources.push({
-            position: surfacePosition,
-            mesh: mesh,
-            value: isLightSide ? 1 : 2, // Dark side energy worth more
-            isLightSide: isLightSide,
-            age: 0
+            mesh,
+            position,
+            pulse,
+            collected: false
         });
     }
     
     /**
-     * Check for collisions between the player and energy
-     * @param {Object} player - The player object
-     * @returns {Number} Number of energy points collected
+     * Update all resources
+     */
+    function update() {
+        const currentTime = Date.now();
+        
+        // Spawn new resources if needed
+        if (currentTime - lastSpawnTime > SPAWN_INTERVAL && resources.length < MAX_RESOURCES) {
+            createResource();
+            lastSpawnTime = currentTime;
+        }
+        
+        // Update existing resources (pulse animation)
+        for (const resource of resources) {
+            if (!resource.collected) {
+                // Update pulse effect
+                resource.pulse.phase += 0.05 * resource.pulse.speed;
+                const pulseValue = 0.5 + Math.sin(resource.pulse.phase) * 0.5;
+                
+                // Apply pulse to material
+                resource.mesh.material.emissiveIntensity = resource.pulse.intensity * pulseValue;
+                
+                // Slight floating motion
+                const time = currentTime * 0.001;
+                const floatY = Math.sin(time * resource.pulse.speed) * 0.05;
+                
+                // Calculate up direction (from planet center to resource)
+                const up = resource.position.clone().normalize();
+                
+                // Apply floating motion in up direction
+                const floatPos = resource.position.clone().add(up.multiplyScalar(floatY));
+                resource.mesh.position.copy(floatPos);
+            }
+        }
+    }
+    
+    /**
+     * Check for collisions with the player
+     * @param {Object} player 
+     * @returns {Number} Number of resources collected
      */
     function checkCollisions(player) {
-        if (!player) return 0;
-        
-        const headPosition = player.getHeadPosition();
         let collectedCount = 0;
+        const playerHead = player.getHeadPosition();
         
-        // Check each energy point for collision with player head
         for (let i = resources.length - 1; i >= 0; i--) {
             const resource = resources[i];
-            const distance = headPosition.distanceTo(resource.position);
             
-            if (distance < COLLISION_DISTANCE) {
-                // Remove energy
-                scene.remove(resource.mesh);
-                resource.mesh.geometry.dispose();
-                resource.mesh.material.dispose();
+            // Skip already collected resources
+            if (resource.collected) continue;
+            
+            // Check distance between player head and resource
+            const distance = playerHead.distanceTo(resource.position);
+            
+            if (distance < COLLECTION_DISTANCE) {
+                // Mark as collected
+                resource.collected = true;
+                collectedCount++;
                 
-                // Track collected value
-                collectedCount += resource.value;
+                // Remove from scene
+                scene.remove(resource.mesh);
                 
                 // Remove from array
                 resources.splice(i, 1);
@@ -118,35 +137,9 @@ export function setupResources(scene, planet) {
     }
     
     /**
-     * Update energy (spawn new points, animate existing)
+     * Remove all resources from scene
      */
-    function update() {
-        const currentTime = Date.now();
-        
-        // Spawn new energy at interval
-        if (currentTime - lastSpawnTime > SPAWN_INTERVAL) {
-            spawnResource();
-            lastSpawnTime = currentTime;
-        }
-        
-        // Animate existing energy
-        for (const resource of resources) {
-            resource.age += 0.01;
-            
-            // Pulse scale
-            const scale = 1 + Math.sin(resource.age * 2) * 0.1;
-            resource.mesh.scale.set(scale, scale, scale);
-            
-            // Slowly rotate
-            resource.mesh.rotation.x += 0.01;
-            resource.mesh.rotation.y += 0.01;
-        }
-    }
-    
-    /**
-     * Remove all energy from the scene
-     */
-    function removeAll() {
+    function remove() {
         for (const resource of resources) {
             scene.remove(resource.mesh);
             resource.mesh.geometry.dispose();
@@ -155,15 +148,14 @@ export function setupResources(scene, planet) {
         resources.length = 0;
     }
     
-    // Initial energy spawning
-    for (let i = 0; i < MAX_ENERGY_POINTS / 2; i++) {
-        spawnResource();
+    // Create initial resources
+    for (let i = 0; i < MAX_RESOURCES / 2; i++) {
+        createResource();
     }
     
-    // Return the resource manager
     return {
         update,
         checkCollisions,
-        remove: removeAll
+        remove
     };
 } 

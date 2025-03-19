@@ -6,130 +6,193 @@
 import * as THREE from 'three';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
 
-// Constants for planet generation
+// Planet configuration
 const PLANET_RADIUS = 10;
-const TERRAIN_HEIGHT = 1;
-const DETAIL_LEVEL = 5; // Determines the complexity of the sphere
+const PLANET_RESOLUTION = 64; // Higher resolution for better looking terrain
+const TERRAIN_ROUGHNESS = 0.15; // Controls height of terrain features
+const SEA_LEVEL = 0.3; // Determines sea level height
 
 /**
- * Create a procedurally generated planet using noise functions
- * @param {THREE.Scene} scene - The Three.js scene to add the planet to
+ * Create the planet geometry, material, and mesh
+ * @param {THREE.Scene} scene - The Three.js scene
  * @returns {Object} The planet object with properties and methods
  */
 export function createPlanet(scene) {
-    // Create the geometry with sufficient detail
-    const geometry = new THREE.IcosahedronGeometry(PLANET_RADIUS, DETAIL_LEVEL);
+    // Create a simplex noise generator for our terrain
+    const noise = new SimplexNoise();
     
-    // Generate the noise for terrain
-    modifyGeometryWithNoise(geometry);
+    // Create a sphere geometry with high resolution
+    const geometry = new THREE.SphereGeometry(PLANET_RADIUS, PLANET_RESOLUTION, PLANET_RESOLUTION);
     
-    // Create materials for light and dark sides
+    // Apply terrain displacement to the geometry
+    applyTerrainDisplacement(geometry, noise);
+    
+    // Create the planet material
     const material = createPlanetMaterial();
     
-    // Create the mesh
+    // Create the planet mesh
     const planetMesh = new THREE.Mesh(geometry, material);
     scene.add(planetMesh);
     
-    // Store original vertex positions for collision detection and movement
-    const originalVertices = [];
-    for (let i = 0; i < geometry.attributes.position.count; i++) {
-        originalVertices.push(new THREE.Vector3(
-            geometry.attributes.position.array[i * 3],
-            geometry.attributes.position.array[i * 3 + 1],
-            geometry.attributes.position.array[i * 3 + 2]
-        ));
-    }
+    // Add atmosphere effect
+    const atmosphere = createAtmosphere();
+    scene.add(atmosphere);
     
-    // Planet object with properties and methods
+    // Return the planet object
     return {
         mesh: planetMesh,
         radius: PLANET_RADIUS,
-        // Get a normalized position on the planet surface from a direction vector
-        getPositionOnSurface: function(direction) {
-            const raycaster = new THREE.Raycaster(
-                new THREE.Vector3(0, 0, 0), // Cast from center
-                direction.normalize()
-            );
-            const intersects = raycaster.intersectObject(planetMesh);
+        
+        // Get the nearest point on the planet's surface from a given point
+        getNearestPointOnSurface: function(point) {
+            // Get the direction from the center to the point
+            const direction = point.clone().normalize();
             
-            if (intersects.length > 0) {
-                return intersects[0].point;
-            } else {
-                // Fallback: project to sphere if no intersection
-                return direction.normalize().multiplyScalar(PLANET_RADIUS);
-            }
-        },
-        // Check if a point is in light or shadow
-        isInLight: function(position) {
-            // Normalize the position
-            const normalizedPos = position.clone().normalize();
-            // Dot product with light direction gives us light intensity
-            // Positive is light side, negative is dark side
-            return normalizedPos.dot(new THREE.Vector3(1, 0.5, 1).normalize()) > 0;
-        },
-        // Find nearest position on planet surface
-        getNearestPointOnSurface: function(position) {
-            // Direction from center to position
-            const direction = position.clone().normalize();
-            return this.getPositionOnSurface(direction);
-        },
-        // Rotate the planet (not used in initial implementation)
-        rotate: function(deltaTime) {
-            planetMesh.rotation.y += 0.05 * deltaTime;
+            // Get elevation at this point on the planet
+            const elevation = getElevationAtDirection(direction, noise);
+            
+            // Calculate the final radius including terrain displacement
+            const finalRadius = PLANET_RADIUS + elevation;
+            
+            // Return the point on the surface
+            return direction.multiplyScalar(finalRadius);
         }
     };
 }
 
 /**
- * Apply simplex noise to geometry vertices to create terrain
+ * Apply terrain displacement to the sphere geometry
  */
-function modifyGeometryWithNoise(geometry) {
-    const noise = new SimplexNoise();
-    const positionAttribute = geometry.attributes.position;
+function applyTerrainDisplacement(geometry, noise) {
+    // Get the vertices from the geometry
+    const positions = geometry.attributes.position;
     
-    // Apply noise to each vertex
-    for (let i = 0; i < positionAttribute.count; i++) {
-        const vertex = new THREE.Vector3(
-            positionAttribute.array[i * 3],
-            positionAttribute.array[i * 3 + 1],
-            positionAttribute.array[i * 3 + 2]
-        );
+    // Create a new array for storing colors
+    const colorArray = new Float32Array(positions.count * 3);
+    const colorAttribute = new THREE.BufferAttribute(colorArray, 3);
+    
+    // Iterate through all vertices
+    for (let i = 0; i < positions.count; i++) {
+        // Get the vertex position
+        const x = positions.getX(i);
+        const y = positions.getY(i);
+        const z = positions.getZ(i);
         
-        // Normalize to get direction
-        const direction = vertex.normalize();
+        // Normalize to get the direction
+        const direction = new THREE.Vector3(x, y, z).normalize();
         
-        // Multiple layers of noise for more interesting terrain
-        let noiseValue = 0;
-        noiseValue += noise.noise3d(direction.x * 2, direction.y * 2, direction.z * 2) * 0.5;
-        noiseValue += noise.noise3d(direction.x * 4, direction.y * 4, direction.z * 4) * 0.25;
-        noiseValue += noise.noise3d(direction.x * 8, direction.y * 8, direction.z * 8) * 0.125;
+        // Get elevation at this point
+        const elevation = getElevationAtDirection(direction, noise);
         
-        // Apply noise to vertex
-        const offset = 1 + (noiseValue * TERRAIN_HEIGHT);
-        vertex.multiplyScalar(PLANET_RADIUS * offset);
+        // Apply displacement to the vertex
+        const displacedPosition = direction.multiplyScalar(PLANET_RADIUS + elevation);
+        positions.setXYZ(i, displacedPosition.x, displacedPosition.y, displacedPosition.z);
         
-        // Update position
-        positionAttribute.array[i * 3] = vertex.x;
-        positionAttribute.array[i * 3 + 1] = vertex.y;
-        positionAttribute.array[i * 3 + 2] = vertex.z;
+        // Determine color based on elevation
+        if (elevation < -SEA_LEVEL * 0.8) {
+            // Deep ocean
+            colorArray[i * 3] = 0.0;
+            colorArray[i * 3 + 1] = 0.0;
+            colorArray[i * 3 + 2] = 0.5;
+        } else if (elevation < -SEA_LEVEL * 0.3) {
+            // Shallow ocean
+            colorArray[i * 3] = 0.0;
+            colorArray[i * 3 + 1] = 0.2;
+            colorArray[i * 3 + 2] = 0.6;
+        } else if (elevation < SEA_LEVEL * 0.1) {
+            // Beaches
+            colorArray[i * 3] = 0.9;
+            colorArray[i * 3 + 1] = 0.8;
+            colorArray[i * 3 + 2] = 0.5;
+        } else if (elevation < SEA_LEVEL * 0.5) {
+            // Lowlands/grasslands
+            colorArray[i * 3] = 0.0;
+            colorArray[i * 3 + 1] = 0.5;
+            colorArray[i * 3 + 2] = 0.0;
+        } else if (elevation < SEA_LEVEL * 0.8) {
+            // Hills
+            colorArray[i * 3] = 0.2;
+            colorArray[i * 3 + 1] = 0.4;
+            colorArray[i * 3 + 2] = 0.0;
+        } else {
+            // Mountains
+            const t = (elevation - SEA_LEVEL * 0.8) / (TERRAIN_ROUGHNESS - SEA_LEVEL * 0.8);
+            colorArray[i * 3] = 0.5 + 0.5 * t;  // More white as height increases (snow)
+            colorArray[i * 3 + 1] = 0.5 + 0.5 * t;
+            colorArray[i * 3 + 2] = 0.5 + 0.5 * t;
+        }
     }
     
-    // Update normals for proper lighting
+    // Add the color attribute to the geometry
+    geometry.setAttribute('color', colorAttribute);
+    
+    // Calculate normals for proper lighting
     geometry.computeVertexNormals();
-    positionAttribute.needsUpdate = true;
 }
 
 /**
- * Create material for the planet with light/dark sides
+ * Get the terrain elevation at a specific direction from the planet center
+ */
+function getElevationAtDirection(direction, noise) {
+    // Extract coordinates
+    const { x, y, z } = direction;
+    
+    // Apply multiple octaves of noise for more interesting terrain
+    let elevation = 0;
+    let frequency = 1;
+    let amplitude = 1;
+    const octaves = 4;
+    let maxValue = 0;
+    
+    for (let i = 0; i < octaves; i++) {
+        // Get noise value at this frequency
+        const noiseValue = noise.noise3d(x * frequency, y * frequency, z * frequency);
+        
+        // Add to elevation
+        elevation += noiseValue * amplitude;
+        
+        // Keep track of max possible value for normalization
+        maxValue += amplitude;
+        
+        // Prepare for next octave
+        amplitude *= 0.5;
+        frequency *= 2;
+    }
+    
+    // Normalize elevation to range [-1, 1]
+    elevation /= maxValue;
+    
+    // Apply terrain roughness
+    return elevation * TERRAIN_ROUGHNESS;
+}
+
+/**
+ * Create the material for the planet
  */
 function createPlanetMaterial() {
-    // Custom shader material to handle day/night transition
+    // Create a material that uses vertex colors
     return new THREE.MeshStandardMaterial({
-        color: 0x3366ff,
-        metalness: 0.1,
+        vertexColors: true,
+        flatShading: false,  // Smooth shading
         roughness: 0.8,
-        flatShading: false,
-        emissive: 0x112244,
-        emissiveIntensity: 0.3,
+        metalness: 0.1,
     });
+}
+
+/**
+ * Create a simple atmosphere effect around the planet
+ */
+function createAtmosphere() {
+    // Slightly larger than the planet
+    const atmosphereGeometry = new THREE.SphereGeometry(PLANET_RADIUS * 1.025, 32, 32);
+    
+    // Semi-transparent blue material
+    const atmosphereMaterial = new THREE.MeshBasicMaterial({
+        color: 0x88aaff,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.BackSide  // Render inside of the sphere
+    });
+    
+    return new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
 } 
