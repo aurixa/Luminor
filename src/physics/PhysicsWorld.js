@@ -13,29 +13,25 @@ const GRAVITY_STRENGTH = 15.0;
  * Creates and manages the physics world for the game
  */
 export class PhysicsWorld {
-  constructor() {
+  constructor(options = {}) {
     // Create the physics world
-    this.world = new CANNON.World({
-      gravity: new CANNON.Vec3(0, 0, 0) // Zero gravity initially, we'll update per-body
-    });
+    this.world = new CANNON.World();
     
-    // Performance settings
-    this.world.broadphase = new CANNON.SAPBroadphase(this.world);
-    this.world.allowSleep = true;
+    // Store planet radius for gravity calculations
+    this.planetRadius = options.planetRadius || 800;
+    this.baseGravity = options.gravity || -9.81;
+    
+    // Disable default gravity since we'll apply it manually
+    this.world.gravity.set(0, 0, 0);
+    
+    // Configure solver iterations
     this.world.solver.iterations = 10;
+    this.world.broadphase = new CANNON.NaiveBroadphase();
     
-    // Track all physics bodies
+    // Store bodies and their visual counterparts
     this.bodies = new Map();
     
-    // Planet center (assuming at origin)
-    this.planetCenter = new CANNON.Vec3(0, 0, 0);
-    
-    // Debug settings
-    this.debug = {
-      showContacts: false,
-      showAABBs: false,
-      showVelocities: false
-    };
+    console.log("[PhysicsWorld] Initialized with planet radius:", this.planetRadius);
   }
   
   /**
@@ -43,20 +39,29 @@ export class PhysicsWorld {
    * @param {CANNON.Body} body - The physics body
    */
   updateBodyGravity(body) {
+    if (!body || !body.position) {
+        throw new Error("Invalid body in gravity update");
+    }
+    
     // Calculate gravity direction (from body to planet center)
     const gravityDir = new CANNON.Vec3();
     gravityDir.copy(this.planetCenter);
     gravityDir.vsub(body.position, gravityDir);
     
+    const length = gravityDir.length();
+    if (length < 0.0001) {
+        // Body too close to center, apply small upward force
+        body.gravity.set(0, GRAVITY_STRENGTH * 0.1, 0);
+        return;
+    }
+    
     // Normalize and scale by gravity strength
-    if (gravityDir.length() > 0) {
-      const normalizedDir = gravityDir.normalize();
-      body.gravity.set(
+    const normalizedDir = gravityDir.normalize();
+    body.gravity.set(
         normalizedDir.x * GRAVITY_STRENGTH,
         normalizedDir.y * GRAVITY_STRENGTH,
         normalizedDir.z * GRAVITY_STRENGTH
-      );
-    }
+    );
   }
   
   /**
@@ -64,18 +69,48 @@ export class PhysicsWorld {
    * @param {number} deltaTime - Time step in seconds
    */
   update(deltaTime) {
-    // Cap delta time to avoid instability
-    const dt = Math.min(deltaTime, 1/30);
-    
-    // Update gravity for each body
-    this.bodies.forEach(body => {
-      if (body.mass > 0) { // Only update gravity for dynamic bodies
-        this.updateBodyGravity(body);
-      }
+    // Apply planet gravity to each body
+    this.world.bodies.forEach(body => {
+        if (body.mass > 0) { // Only apply to dynamic bodies
+            // Get body position as THREE vector for easier math
+            const pos = new THREE.Vector3(
+                body.position.x,
+                body.position.y,
+                body.position.z
+            );
+            
+            // Calculate distance from planet center
+            const distanceFromCenter = pos.length();
+            
+            // Calculate gravity strength (inverse square law)
+            const gravityStrength = this.baseGravity * 
+                (this.planetRadius * this.planetRadius) / 
+                (distanceFromCenter * distanceFromCenter);
+            
+            // Calculate gravity direction (towards planet center)
+            const gravityDir = pos.normalize().multiplyScalar(-1);
+            
+            // Apply gravity force
+            const gravityForce = new CANNON.Vec3(
+                gravityDir.x * gravityStrength * body.mass,
+                gravityDir.y * gravityStrength * body.mass,
+                gravityDir.z * gravityStrength * body.mass
+            );
+            
+            body.applyForce(gravityForce, body.position);
+        }
     });
     
-    // Step the physics world
-    this.world.step(dt);
+    // Step the physics simulation
+    this.world.step(deltaTime);
+    
+    // Update visual models
+    this.bodies.forEach((visualModel, body) => {
+        if (visualModel) {
+            visualModel.position.copy(body.position);
+            visualModel.quaternion.copy(body.quaternion);
+        }
+    });
   }
   
   /**
@@ -84,26 +119,42 @@ export class PhysicsWorld {
    * @param {Object} owner - The owner object (for tracking)
    * @returns {CANNON.Body} The added body
    */
-  addBody(body, owner = null) {
-    // Create per-body gravity
-    body.gravity = new CANNON.Vec3(0, 0, 0);
-    
-    // Override the applyForce method to use local gravity
-    const originalApplyForce = body.applyForce;
-    body.applyForce = function(force, worldPoint) {
-      force.vadd(this.gravity, force);
-      originalApplyForce.call(this, force, worldPoint);
-    };
-    
-    // Add to world
-    this.world.addBody(body);
-    
-    // Track the body
-    if (owner) {
-      this.bodies.set(owner, body);
+  addBody(body, visualModel = null) {
+    if (!body) {
+        console.error("Attempted to add invalid body to physics world");
+        return null;
     }
     
-    return body;
+    try {
+        // Create per-body gravity
+        body.gravity = new CANNON.Vec3(0, 0, 0);
+        
+        // Override the applyForce method to use local gravity
+        const originalApplyForce = body.applyForce;
+        body.applyForce = function(force, worldPoint) {
+            if (!force || !worldPoint) return; // Skip invalid forces
+            
+            try {
+                force.vadd(this.gravity, force);
+                originalApplyForce.call(this, force, worldPoint);
+            } catch (e) {
+                console.error("Error applying force:", e);
+            }
+        };
+        
+        // Add to world
+        this.world.addBody(body);
+        
+        // Track the body
+        if (visualModel) {
+            this.bodies.set(body, visualModel);
+        }
+        
+        return body;
+    } catch (e) {
+        console.error("Error adding body to physics world:", e);
+        return null;
+    }
   }
   
   /**
@@ -114,11 +165,7 @@ export class PhysicsWorld {
     this.world.removeBody(body);
     
     // Remove from tracking
-    this.bodies.forEach((value, key) => {
-      if (value === body) {
-        this.bodies.delete(key);
-      }
-    });
+    this.bodies.delete(body);
   }
   
   /**
@@ -127,26 +174,14 @@ export class PhysicsWorld {
    * @returns {CANNON.Body} The created body
    */
   createSphereBody(options = {}) {
-    const defaults = {
-      mass: 1,
-      radius: 1,
-      position: new CANNON.Vec3(0, 0, 0),
-      material: new CANNON.Material({ friction: 0.3, restitution: 0.3 })
-    };
-    
-    const opts = { ...defaults, ...options };
-    
+    const shape = new CANNON.Sphere(options.radius || 1.0);
     const body = new CANNON.Body({
-      mass: opts.mass,
-      position: opts.position,
-      material: opts.material,
-      linearDamping: opts.linearDamping || 0.01,
-      angularDamping: opts.angularDamping || 0.01
+        mass: options.mass || 1,
+        position: options.position || new CANNON.Vec3(0, 0, 0),
+        shape: shape,
+        linearDamping: options.linearDamping || 0.01,
+        angularDamping: options.angularDamping || 0.01
     });
-    
-    // Add sphere shape
-    const shape = new CANNON.Sphere(opts.radius);
-    body.addShape(shape);
     
     return body;
   }
@@ -231,68 +266,95 @@ export class PhysicsWorld {
           return;
         }
         
-        // Get the position in Three.js format
-        const position = new THREE.Vector3(
-          body.position.x,
-          body.position.y,
-          body.position.z
-        );
-        
-        // Get nearest point on planet surface
-        const surfacePoint = this.planet.getNearestPointOnSurface(position);
-        
-        // Calculate penetration depth
-        const normal = surfacePoint.clone().normalize();
-        const bodyToPlanetDir = position.clone().sub(new THREE.Vector3(0, 0, 0)).normalize();
-        const distanceToSurface = position.distanceTo(surfacePoint);
-        const bodyRadius = body.shapes[0] instanceof CANNON.Sphere ? body.shapes[0].radius : 1;
-        const penetration = bodyRadius - distanceToSurface;
-        
-        // If body is penetrating the planet surface
-        if (penetration > 0) {
-          // Convert to Cannon vectors
-          const worldNormal = new CANNON.Vec3(normal.x, normal.y, normal.z);
-          
-          // Calculate impulse strength based on penetration depth and restitution
-          const impulseStrength = penetration * 10 * this.options.restitution;
-          
-          // Create impulse vector
-          const impulse = new CANNON.Vec3(
-            worldNormal.x * impulseStrength,
-            worldNormal.y * impulseStrength,
-            worldNormal.z * impulseStrength
+        try {
+          // Get the position in Three.js format
+          const position = new THREE.Vector3(
+            body.position.x,
+            body.position.y,
+            body.position.z
           );
           
-          // Apply impulse to resolve collision
-          const worldPoint = new CANNON.Vec3(surfacePoint.x, surfacePoint.y, surfacePoint.z);
-          body.applyImpulse(impulse, worldPoint);
-          
-          // Apply friction force
-          const relativeVelocity = body.velocity.clone();
-          const normalVelocity = worldNormal.dot(relativeVelocity);
-          const normalComponent = new CANNON.Vec3(
-            worldNormal.x * normalVelocity,
-            worldNormal.y * normalVelocity,
-            worldNormal.z * normalVelocity
-          );
-          
-          const tangentialVelocity = new CANNON.Vec3();
-          relativeVelocity.vsub(normalComponent, tangentialVelocity);
-          
-          // Only apply friction if there's significant tangential velocity
-          if (tangentialVelocity.lengthSquared() > 0.1) {
-            const frictionForce = tangentialVelocity.clone();
-            const normalizedFriction = frictionForce.normalize();
-            // Create a new vector with the scaled values
-            const scaledFriction = new CANNON.Vec3(
-              normalizedFriction.x * -this.options.friction * impulseStrength,
-              normalizedFriction.y * -this.options.friction * impulseStrength,
-              normalizedFriction.z * -this.options.friction * impulseStrength
-            );
-            body.applyForce(scaledFriction, body.position);
+          // Validate position before proceeding
+          if (!this.isValidPosition(position)) {
+            console.warn("Invalid body position in collision handler:", position);
+            return;
           }
+          
+          // Get nearest point on planet surface
+          const surfacePoint = this.planet.getNearestPointOnSurface(position);
+          
+          // Validate surface point
+          if (!this.isValidPosition(surfacePoint)) {
+            console.warn("Invalid surface point returned from getNearestPointOnSurface");
+            return;
+          }
+          
+          // Calculate penetration depth
+          const normal = surfacePoint.clone().normalize();
+          const bodyToPlanetDir = position.clone().sub(new THREE.Vector3(0, 0, 0)).normalize();
+          const distanceToSurface = position.distanceTo(surfacePoint);
+          
+          if (isNaN(distanceToSurface)) {
+            console.warn("Invalid distance calculation in collision handler");
+            return;
+          }
+          
+          const bodyRadius = body.shapes[0] instanceof CANNON.Sphere ? body.shapes[0].radius : 1;
+          const penetration = bodyRadius - distanceToSurface;
+          
+          // Apply collision response if penetrating
+          if (penetration > 0) {
+            // Convert normal to CANNON.Vec3
+            const responseNormal = new CANNON.Vec3(normal.x, normal.y, normal.z);
+            
+            // Apply position correction
+            body.position.vadd(
+              responseNormal.scale(penetration * this.options.restitution),
+              body.position
+            );
+            
+            // Apply velocity correction
+            const relativeVelocity = body.velocity.dot(responseNormal);
+            if (relativeVelocity < 0) {
+              const impulse = -relativeVelocity * (1 + this.options.restitution);
+              body.velocity.vadd(
+                responseNormal.scale(impulse),
+                body.velocity
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Error in planet collision handler:", error);
         }
       }
     };
+  }
+
+  // Add position validation helper
+  isValidPosition(pos) {
+    return pos && 
+           typeof pos.x === 'number' && !isNaN(pos.x) &&
+           typeof pos.y === 'number' && !isNaN(pos.y) &&
+           typeof pos.z === 'number' && !isNaN(pos.z);
+  }
+
+  // Add validation helper for Cannon vectors
+  isValidCannonVector(vec) {
+    return vec && 
+           typeof vec.x === 'number' && !isNaN(vec.x) &&
+           typeof vec.y === 'number' && !isNaN(vec.y) &&
+           typeof vec.z === 'number' && !isNaN(vec.z);
+  }
+
+  reset() {
+    // Remove all bodies
+    this.bodies.forEach((_, body) => {
+        this.world.removeBody(body);
+    });
+    this.bodies.clear();
+    
+    // Reset the world
+    this.world.gravity.set(0, 0, 0);
+    this.world.solver.reset();
   }
 } 

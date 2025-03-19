@@ -9,26 +9,29 @@ import * as THREE from 'three';
 // Hover bike physics configuration
 const HOVER_CONSTANTS = {
   // Mass and physical properties
-  MASS: 5.0,
+  MASS: 1.0,
   SEGMENT_SIZE: 2.0,
   
   // Hover suspension properties
-  HOVER_HEIGHT: 7.0,
-  HOVER_STIFFNESS: 150.0,
-  HOVER_DAMPING: 4.0,
+  HOVER_HEIGHT: 20.0,         // Increased for better terrain clearance
+  HOVER_STIFFNESS: 1200.0,    // Increased for stronger hover force
+  HOVER_DAMPING: 35.0,        // Increased for better stability
   
   // Movement properties
   THRUST_MAGNITUDE: 250.0,
   STEER_TORQUE_MAGNITUDE: 80.0,
   
   // Physics tuning
-  LINEAR_DAMPING: 0.4,
-  ANGULAR_DAMPING: 0.6,
+  LINEAR_DAMPING: 0.2,
+  ANGULAR_DAMPING: 0.2,
   
   // Safety parameters
   MAX_PLANET_DISTANCE: 500.0,    // Maximum distance from planet center
   MIN_PLANET_DISTANCE: 100.0,    // Minimum distance from planet center
-  EMERGENCY_THRUST: 500.0        // Emergency thrust when too close to center
+  EMERGENCY_THRUST: 1500.0,    // Increased emergency thrust
+  SPAWN_HEIGHT_OFFSET: 40.0,   // Increased spawn height
+  MAX_FORCE: 4000.0,          // Increased max force
+  RECOVERY_FORCE: 3000.0       // Increased recovery force
 };
 
 /**
@@ -43,90 +46,96 @@ export class HoverBike {
    */
   constructor(physicsWorld, planet, visualModel) {
     console.log("[HoverBike] Initializing...");
+    
+    // Validate required dependencies first
+    if (!physicsWorld || !planet || !visualModel) {
+        throw new Error("[HoverBike] Missing required dependencies");
+    }
+    
     this.physicsWorld = physicsWorld;
     this.planet = planet;
     this.visualModel = visualModel;
     
-    // Print out planet details to debug
-    console.log("[HoverBike] Planet:", this.planet ? "Found" : "Not found");
-    if (this.planet) {
-      console.log("[HoverBike] Planet radius:", this.planet.radius);
-      console.log("[HoverBike] Planet getNearestPointOnSurface:", 
-                 typeof this.planet.getNearestPointOnSurface === 'function' ? "Function exists" : "Missing");
-    }
-    
-    // Create the physics body for the hover bike
-    this.initPhysicsBody();
-    
-    // Keep track of current direction separately from body orientation
+    // Initialize state
+    this.initialized = false;
+    this.body = null;
     this.currentDirection = new THREE.Vector3(0, 0, 1).normalize();
-    
-    // Controls state
-    this.keys = {
-      left: false,
-      right: false
-    };
-    
-    // Safety state
     this.lastSafePosition = null;
     this.insidePlanet = false;
     
-    // Debug visualization
-    this.debug = {
-      enabled: false,
-      hoverRays: []
+    // Controls state
+    this.keys = {
+        left: false,
+        right: false
     };
     
-    // Attempt to spawn on surface
-    if (this.body && this.planet) {
-      try {
+    // Debug visualization
+    this.debug = {
+        enabled: false,
+        hoverRays: []
+    };
+    
+    // Initialize physics in a controlled sequence
+    try {
+        this.initPhysicsBody();
         this.spawnOnSurface();
-        console.log("[HoverBike] Spawned on surface");
-      } catch (e) {
-        console.error("[HoverBike] Error spawning on surface:", e);
-        // Set a default safe position if spawn fails
-        const defaultPos = new CANNON.Vec3(0, planet.radius + HOVER_CONSTANTS.HOVER_HEIGHT * 2, 0);
-        this.body.position.copy(defaultPos);
-        this.lastSafePosition = defaultPos.clone();
-      }
-    } else {
-      console.error("[HoverBike] Cannot spawn - missing body or planet");
+        this.initialized = true;
+        console.log("[HoverBike] Initialization complete");
+    } catch (e) {
+        console.error("[HoverBike] Failed to initialize:", e);
+        this.initialized = false;
     }
-    console.log("[HoverBike] Initialization complete");
   }
   
   /**
    * Initialize the physics body
    */
   initPhysicsBody() {
-    // Check if we have a physics world
-    if (!this.physicsWorld) {
-      console.error("[HoverBike] No physics world provided");
-      return;
+    if (!this.physicsWorld || !this.planet) {
+        throw new Error("[HoverBike] Cannot create physics body - missing dependencies");
     }
     
-    console.log("[HoverBike] Creating physics body at position:", 
-      this.visualModel.position.x, 
-      this.visualModel.position.y, 
-      this.visualModel.position.z
-    );
-    
-    // Create a sphere body for the hover bike
-    this.body = this.physicsWorld.createSphereBody({
-      mass: HOVER_CONSTANTS.MASS,
-      radius: HOVER_CONSTANTS.SEGMENT_SIZE,
-      position: new CANNON.Vec3(
-        this.visualModel.position.x,
-        this.visualModel.position.y,
-        this.visualModel.position.z
-      ),
-      linearDamping: HOVER_CONSTANTS.LINEAR_DAMPING,
-      angularDamping: HOVER_CONSTANTS.ANGULAR_DAMPING
-    });
-    
-    // Add the body to the physics world
-    this.physicsWorld.addBody(this.body, this);
-    console.log("[HoverBike] Physics body created");
+    try {
+        // Create initial position vector
+        const planetRadius = this.planet.radius || 800;
+        const spawnHeight = HOVER_CONSTANTS.HOVER_HEIGHT * 2;
+        const initialPos = new THREE.Vector3(planetRadius + spawnHeight, 0, 0);
+        
+        // Validate position before creating body
+        if (!this.isValidPosition(initialPos)) {
+            throw new Error("[HoverBike] Invalid initial position");
+        }
+        
+        // Create the physics body
+        this.body = this.physicsWorld.createSphereBody({
+            mass: HOVER_CONSTANTS.MASS,
+            radius: HOVER_CONSTANTS.SEGMENT_SIZE,
+            position: new CANNON.Vec3(initialPos.x, initialPos.y, initialPos.z),
+            linearDamping: HOVER_CONSTANTS.LINEAR_DAMPING,
+            angularDamping: HOVER_CONSTANTS.ANGULAR_DAMPING
+        });
+        
+        if (!this.body) {
+            throw new Error("[HoverBike] Failed to create physics body");
+        }
+        
+        // Store initial position as safe position
+        this.lastSafePosition = new CANNON.Vec3().copy(this.body.position);
+        
+        // Add to physics world
+        this.physicsWorld.addBody(this.body, this);
+        
+        // Update visual model position
+        if (this.visualModel) {
+            this.visualModel.position.copy(initialPos);
+        }
+        
+        console.log("[HoverBike] Physics body created at position:", initialPos);
+        return true;
+    } catch (error) {
+        console.error("[HoverBike] Error in initPhysicsBody:", error);
+        return false;
+    }
   }
   
   /**
@@ -134,47 +143,50 @@ export class HoverBike {
    */
   spawnOnSurface() {
     if (!this.body || !this.planet) {
-      console.error("[HoverBike] Cannot spawn - missing body or planet");
-      return;
+        throw new Error("[HoverBike] Cannot spawn - missing body or planet");
     }
-    
-    // Start at a position well outside the planet
-    const startPoint = new THREE.Vector3(0, this.planet.radius * 1.5, 0);
-    console.log("[HoverBike] Spawning from", startPoint);
     
     try {
-      // Get surface point under this position
-      console.log("[HoverBike] Getting nearest surface point...");
-      const surfacePoint = this.planet.getNearestPointOnSurface(startPoint);
-      console.log("[HoverBike] Surface point:", surfacePoint);
-      
-      if (!surfacePoint || typeof surfacePoint.clone !== 'function') {
-        throw new Error("Invalid surface point returned");
-      }
-      
-      // Position slightly above surface
-      const spawnPos = surfacePoint.clone().normalize()
-        .multiplyScalar(surfacePoint.length() + HOVER_CONSTANTS.HOVER_HEIGHT);
-      console.log("[HoverBike] Spawn position:", spawnPos);
-      
-      // Set position
-      this.body.position.x = spawnPos.x;
-      this.body.position.y = spawnPos.y;
-      this.body.position.z = spawnPos.z;
-      this.body.velocity.set(0, 0, 0);
-      this.body.angularVelocity.set(0, 0, 0);
-      
-      // Save this as a safe position
-      this.lastSafePosition = new CANNON.Vec3().copy(this.body.position);
-      console.log("[HoverBike] Spawn complete");
-    } catch (e) {
-      console.error("[HoverBike] Spawn error:", e);
-      // Fallback to a safe default position
-      const defaultPos = new CANNON.Vec3(0, this.planet.radius + HOVER_CONSTANTS.HOVER_HEIGHT * 2, 0);
-      this.body.position.copy(defaultPos);
-      this.lastSafePosition = defaultPos.clone();
-      console.log("[HoverBike] Using fallback position");
+        // Use a simple, guaranteed valid position first
+        const safePos = new THREE.Vector3(
+            this.planet.radius + HOVER_CONSTANTS.SPAWN_HEIGHT_OFFSET * 2,
+            0,
+            0
+        );
+        
+        // Set initial position
+        this.body.position.set(safePos.x, safePos.y, safePos.z);
+        this.body.velocity.set(0, 0, 0);
+        this.body.angularVelocity.set(0, 0, 0);
+        
+        // Update visual model
+        if (this.visualModel) {
+            this.visualModel.position.copy(safePos);
+        }
+        
+        // Set initial direction and store safe position
+        this.currentDirection = new THREE.Vector3(0, 0, 1);
+        this.lastSafePosition = new CANNON.Vec3().copy(this.body.position);
+        
+        console.log("[HoverBike] Spawn complete at position:", 
+            this.body.position.x,
+            this.body.position.y,
+            this.body.position.z
+        );
+        
+        return true;
+    } catch (error) {
+        console.error("[HoverBike] Error in spawnOnSurface:", error);
+        return false;
     }
+  }
+  
+  // Add position validation helper
+  isValidPosition(pos) {
+    return pos && 
+           typeof pos.x === 'number' && !isNaN(pos.x) &&
+           typeof pos.y === 'number' && !isNaN(pos.y) &&
+           typeof pos.z === 'number' && !isNaN(pos.z);
   }
   
   /**
@@ -182,25 +194,33 @@ export class HoverBike {
    * @param {number} deltaTime - Time step in seconds
    */
   update(deltaTime) {
-    if (!this.body || !this.planet) {
-      console.warn("[HoverBike] Cannot update - missing body or planet");
-      return;
+    // Skip update if not properly initialized
+    if (!this.initialized || !this.body || !this.planet) {
+        return;
     }
     
-    // Safety check to prevent going too far from or too close to planet
-    this.enforceSafetyBounds();
-    
-    // Apply hover forces to stay above the terrain
-    this.applyHoverForces();
-    
-    // Apply movement controls
-    this.applyControls();
-    
-    // Update the visual model position and rotation based on physics body
-    this.syncVisualsToPhysics();
-    
-    // Check for safe position to store
-    this.updateSafePosition();
+    try {
+        // Safety check to prevent going too far from or too close to planet
+        this.enforceSafetyBounds();
+        
+        // Apply hover forces to stay above the terrain
+        this.applyHoverForces();
+        
+        // Apply movement controls
+        this.applyControls();
+        
+        // Update the visual model position and rotation based on physics body
+        this.syncVisualsToPhysics();
+        
+        // Check for safe position to store
+        this.updateSafePosition();
+    } catch (e) {
+        console.error("[HoverBike] Error in update:", e);
+        // Attempt recovery by resetting to last safe state
+        if (this.lastSafePosition) {
+            this.recoverFromError();
+        }
+    }
   }
   
   /**
@@ -293,103 +313,88 @@ export class HoverBike {
    * Apply hover forces using raycasts to simulate suspension
    */
   applyHoverForces() {
-    // Skip if not properly initialized
-    if (!this.body || !this.planet) return;
+    if (!this.initialized || !this.body || !this.planet) return;
     
     try {
-      // Get the current position as starting point for the raycast
-      const rayOrigin = this.body.position.clone();
-      
-      // Calculate ray direction (from body to planet center = "down")
-      const planetCenter = new CANNON.Vec3(0, 0, 0); // Assuming planet at origin
-      const rayDirection = new CANNON.Vec3();
-      planetCenter.vsub(rayOrigin, rayDirection);
-      const normalizedRayDir = rayDirection.normalize();
-      
-      // Setup raycast
-      const rayLength = HOVER_CONSTANTS.HOVER_HEIGHT * 3; // Increased for better detection
-      const scaledRayDir = new CANNON.Vec3(
-        normalizedRayDir.x * rayLength,
-        normalizedRayDir.y * rayLength,
-        normalizedRayDir.z * rayLength
-      );
-      const rayEndPoint = new CANNON.Vec3().copy(rayOrigin).vadd(scaledRayDir);
-      
-      // Convert to THREE.js vectors for the planet's getNearestPointOnSurface function
-      const rayOriginThree = new THREE.Vector3(rayOrigin.x, rayOrigin.y, rayOrigin.z);
-      
-      // Get the nearest point on the planet surface
-      const surfacePoint = this.planet.getNearestPointOnSurface(rayOriginThree);
-      
-      if (!surfacePoint) {
-        console.error("[HoverBike] Surface point is null");
-        return;
-      }
-      
-      const surfacePointCannon = new CANNON.Vec3(surfacePoint.x, surfacePoint.y, surfacePoint.z);
-      
-      // Calculate distance to surface
-      const distance = rayOrigin.distanceTo(surfacePointCannon);
-      
-      // Check if we're inside the planet (distance < 0)
-      if (distance < HOVER_CONSTANTS.SEGMENT_SIZE) {
-        // We're penetrating the surface, apply strong repulsion force
-        const repulsionMagnitude = -HOVER_CONSTANTS.HOVER_STIFFNESS * 5.0;
-        const repulsionForce = new CANNON.Vec3(
-          normalizedRayDir.x * repulsionMagnitude,
-          normalizedRayDir.y * repulsionMagnitude,
-          normalizedRayDir.z * repulsionMagnitude
+        const rayOriginThree = new THREE.Vector3(
+            this.body.position.x,
+            this.body.position.y,
+            this.body.position.z
         );
         
-        this.body.applyForce(repulsionForce, rayOrigin);
-        
-        // Dampen velocity to reduce bouncing
-        this.body.velocity.scale(0.9, this.body.velocity);
-        return;
-      }
-      
-      // Normal hover forces when not penetrating
-      // Calculate hover force
-      const relativeVelocity = this.body.velocity.dot(normalizedRayDir);
-      const distanceError = HOVER_CONSTANTS.HOVER_HEIGHT - distance;
-      const dampingForce = -relativeVelocity * HOVER_CONSTANTS.HOVER_DAMPING;
-      
-      // Create a force that pushes away when too close and pulls in when too far
-      let forceMagnitude = 0;
-      
-      if (Math.abs(distance - HOVER_CONSTANTS.HOVER_HEIGHT) > 0.1) {
-        // If we're not at the target height (with small error margin)
-        if (distance < HOVER_CONSTANTS.HOVER_HEIGHT) {
-          // Too close to surface - push away (negative direction = away from planet)
-          const pushForce = distanceError * HOVER_CONSTANTS.HOVER_STIFFNESS + dampingForce;
-          forceMagnitude = -pushForce;
-        }
-        else if (distance < HOVER_CONSTANTS.HOVER_HEIGHT * 2) {
-          // Too far from surface but within reasonable range - pull back (positive direction = toward planet)
-          // Use higher stiffness for pulling back to ensure return to surface
-          const pullForce = -distanceError * (HOVER_CONSTANTS.HOVER_STIFFNESS * 1.5) + dampingForce;
-          forceMagnitude = pullForce;
-        }
-        else {
-          // Way too far from surface - apply stronger attraction
-          forceMagnitude = distance * 0.5; // Scaled based on distance
+        // Get the nearest point on the planet surface
+        const surfacePoint = this.planet.getNearestPointOnSurface(rayOriginThree);
+        if (!surfacePoint) {
+            console.warn("[HoverBike] No surface point found");
+            this.recoverFromError();
+            return;
         }
         
-        // Apply the force at the body position
-        const hoverForce = new CANNON.Vec3(
-          normalizedRayDir.x * forceMagnitude,
-          normalizedRayDir.y * forceMagnitude,
-          normalizedRayDir.z * forceMagnitude
+        // Calculate distance and direction to surface
+        const toSurface = new THREE.Vector3().subVectors(surfacePoint, rayOriginThree);
+        const distanceToSurface = toSurface.length();
+        const directionToSurface = toSurface.normalize();
+        
+        // Convert to CANNON vectors
+        const normalizedDir = new CANNON.Vec3(
+            directionToSurface.x,
+            directionToSurface.y,
+            directionToSurface.z
         );
-        this.body.applyForce(hoverForce, rayOrigin);
-      }
-      
-      // Debug visualization
-      if (this.debug.enabled) {
-        this.visualizeHoverRay(rayOrigin, normalizedRayDir, distance);
-      }
+        
+        // Calculate relative velocity along surface normal
+        const relativeVelocity = this.body.velocity.dot(normalizedDir);
+        
+        // Determine if we're inside the terrain
+        const insideTerrain = distanceToSurface < HOVER_CONSTANTS.SEGMENT_SIZE;
+        
+        if (insideTerrain) {
+            // Emergency recovery - strong upward force
+            const recoveryForce = new CANNON.Vec3(
+                -normalizedDir.x * HOVER_CONSTANTS.RECOVERY_FORCE,
+                -normalizedDir.y * HOVER_CONSTANTS.RECOVERY_FORCE,
+                -normalizedDir.z * HOVER_CONSTANTS.RECOVERY_FORCE
+            );
+            
+            this.body.applyForce(recoveryForce, this.body.position);
+            
+            // Strong damping when recovering
+            this.body.velocity.scale(0.8, this.body.velocity);
+        } else {
+            // Normal hover behavior
+            const targetHeight = HOVER_CONSTANTS.HOVER_HEIGHT;
+            const heightError = distanceToSurface - targetHeight;
+            
+            // Calculate hover force
+            let forceMagnitude = -heightError * HOVER_CONSTANTS.HOVER_STIFFNESS;
+            
+            // Add damping based on vertical velocity
+            forceMagnitude -= relativeVelocity * HOVER_CONSTANTS.HOVER_DAMPING;
+            
+            // Clamp force magnitude
+            forceMagnitude = Math.max(
+                -HOVER_CONSTANTS.MAX_FORCE,
+                Math.min(HOVER_CONSTANTS.MAX_FORCE, forceMagnitude)
+            );
+            
+            // Apply hover force
+            const hoverForce = new CANNON.Vec3(
+                normalizedDir.x * forceMagnitude,
+                normalizedDir.y * forceMagnitude,
+                normalizedDir.z * forceMagnitude
+            );
+            
+            this.body.applyForce(hoverForce, this.body.position);
+        }
+        
+        // Update last safe position if we're in a good state
+        if (!insideTerrain && Math.abs(relativeVelocity) < 10) {
+            this.lastSafePosition = new CANNON.Vec3().copy(this.body.position);
+        }
+        
     } catch (e) {
-      console.error("[HoverBike] Error in applyHoverForces:", e);
+        console.error("[HoverBike] Error in applyHoverForces:", e);
+        this.recoverFromError();
     }
   }
   
@@ -512,5 +517,16 @@ export class HoverBike {
     
     // Try to spawn on the surface
     this.spawnOnSurface();
+  }
+  
+  // Add new error recovery method
+  recoverFromError() {
+    if (!this.lastSafePosition) return;
+    
+    console.log("[HoverBike] Attempting error recovery");
+    this.body.position.copy(this.lastSafePosition);
+    this.body.velocity.set(0, 0, 0);
+    this.body.angularVelocity.set(0, 0, 0);
+    this.currentDirection = new THREE.Vector3(0, 0, 1).normalize();
   }
 } 

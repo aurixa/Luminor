@@ -71,10 +71,25 @@
             margin-top: 30px;
         }
         
+        #error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: #ff3333;
+            max-width: 80%;
+            text-align: center;
+            border: 2px solid #ff3333;
+            display: none;
+        }
+        
         /* Debug container styles */
         #debug-container {
             position: absolute;
-            bottom: 10px;
+            bottom: 40px;
             right: 10px;
             background-color: rgba(0, 0, 0, 0.7);
             color: #00ffaa;
@@ -114,73 +129,6 @@
             background-color: rgba(0, 255, 170, 0.2);
         }
     </style>
-    
-    <!-- Load THREE.js directly to ensure it's available -->
-    <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
-    
-    <!-- Load necessary THREE.js modules -->
-    <script src="https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three@0.157.0/examples/jsm/math/SimplexNoise.js"></script>
-    <script src="https://unpkg.com/three@0.157.0/examples/jsm/libs/stats.module.js"></script>
-    
-    <!-- Create SimplexNoise implementation directly -->
-    <script>
-        // Create a global SimplexNoise implementation immediately
-        (function(global) {
-            class SimplexNoise {
-                constructor() {
-                    console.log("Creating new SimplexNoise instance");
-                    this.seed = Math.random() * 10000;
-                    this.initialized = true;
-                }
-                
-                // Basic noise function for 2D coordinates
-                noise(x, y) {
-                    return Math.sin(x * 12.9898 + y * 78.233 + this.seed) * 0.5 + 0.5;
-                }
-                
-                // 3D noise implementation that simulates simplex noise
-                noise3d(x, y, z) {
-                    if (!this.initialized) {
-                        console.error("SimplexNoise not properly initialized");
-                        return 0;
-                    }
-                    
-                    // Using multiple layers of noise for more natural terrain
-                    let value = 0;
-                    
-                    // Layer 1 - low frequency
-                    value += Math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + this.seed) * 0.5;
-                    
-                    // Layer 2 - medium frequency
-                    value += Math.sin(x * 39.346 + y * 11.135 + z * 83.155 + this.seed * 1.5) * 0.25;
-                    
-                    // Layer 3 - high frequency
-                    value += Math.sin(x * 73.156 + y * 52.235 + z * 9.151 + this.seed * 2.5) * 0.125;
-                    
-                    // Normalize to [0, 1] range
-                    return (value * 0.75 + 0.5);
-                }
-            }
-            
-            // Expose SimplexNoise to both global and window scope
-            if (typeof global !== 'undefined') {
-                global.SimplexNoise = SimplexNoise;
-            }
-            if (typeof window !== 'undefined') {
-                window.SimplexNoise = SimplexNoise;
-            }
-            
-            // Test the implementation
-            try {
-                const testNoise = new SimplexNoise();
-                const testValue = testNoise.noise3d(1, 2, 3);
-                console.log("SimplexNoise implementation test successful:", testValue);
-            } catch (e) {
-                console.error("SimplexNoise implementation test failed:", e);
-            }
-        })(typeof window !== 'undefined' ? window : global);
-    </script>
 </head>
 <body>
     <div id="loading-screen">
@@ -188,9 +136,11 @@
         <div id="loading-bar-container">
             <div id="loading-bar"></div>
         </div>
-        <p>Loading game assets...</p>
+        <p id="loading-status">Loading game assets...</p>
         <button id="start-button" style="display: none;">START GAME</button>
     </div>
+    
+    <div id="error-container"></div>
     
     <!-- Debug toggle button -->
     <button id="debug-toggle">Show Debug</button>
@@ -198,131 +148,125 @@
     <!-- Debug container for console output -->
     <div id="debug-container" style="display: none;"></div>
     
-    <!-- Debug redirector script -->
     <script>
-        // Set up the debug container and console redirection
-        document.addEventListener('DOMContentLoaded', () => {
-            const debugContainer = document.getElementById('debug-container');
-            const debugToggle = document.getElementById('debug-toggle');
-            
-            // Initially hide the debug container
-            debugContainer.style.display = 'none';
-            
-            // Set up toggle button
-            debugToggle.addEventListener('click', () => {
-                const isVisible = debugContainer.style.display !== 'none';
-                debugContainer.style.display = isVisible ? 'none' : 'block';
-                debugToggle.textContent = isVisible ? 'Show Debug' : 'Hide Debug';
-            });
-            
-            // Override console methods to redirect to debug container
-            const originalConsoleLog = console.log;
-            const originalConsoleError = console.error;
-            const originalConsoleWarn = console.warn;
-            
-            // Function to add a message to the debug container
-            function addDebugMessage(message, type = 'log') {
-                // Create paragraph for the message
-                const p = document.createElement('p');
-                p.textContent = message;
-                
-                // Add color based on message type
-                if (type === 'error') {
-                    p.style.color = '#ff6666';
-                } else if (type === 'warn') {
-                    p.style.color = '#ffaa00';
-                }
-                
-                // Add to container and scroll to bottom
-                debugContainer.appendChild(p);
-                debugContainer.scrollTop = debugContainer.scrollHeight;
-                
-                // Limit number of messages
-                while (debugContainer.childNodes.length > 50) {
-                    debugContainer.removeChild(debugContainer.firstChild);
-                }
-            }
-            
-            // Override console.log
-            console.log = function(...args) {
-                // Call original method
-                originalConsoleLog.apply(console, args);
-                // Add to debug container
-                addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
-            };
-            
-            // Override console.error
-            console.error = function(...args) {
-                // Call original method
-                originalConsoleError.apply(console, args);
-                // Add to debug container
-                addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '), 'error');
-            };
-            
-            // Override console.warn
-            console.warn = function(...args) {
-                // Call original method
-                originalConsoleWarn.apply(console, args);
-                // Add to debug container
-                addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '), 'warn');
-            };
-            
-            // Clear previous messages
-            debugContainer.innerHTML = '<p style="color:#00ffaa">Debug Console Initialized</p>';
-        });
-    </script>
-    
-    <!-- Main game script -->
-    <script type="module" src="/src/main.js"></script>
-    <script>
-        // Make sure THREE.js is available globally
-        window.addEventListener('DOMContentLoaded', () => {
-            // Check if THREE is loaded
-            if (typeof THREE === 'undefined') {
-                console.error("THREE.js not found, manually loading it");
-                
-                // Manually load THREE.js if needed
-                const script = document.createElement('script');
-                script.src = 'https://unpkg.com/three@0.157.0/build/three.min.js';
-                script.onload = () => {
-                    console.log("THREE.js loaded successfully");
-                    startLoading();
-                };
-                document.head.appendChild(script);
-            } else {
-                console.log("THREE.js is already loaded");
-                startLoading();
-            }
+        // Setup debug handling
+        const debugContainer = document.getElementById('debug-container');
+        const debugToggle = document.getElementById('debug-toggle');
+        const loadingStatus = document.getElementById('loading-status');
+        const errorContainer = document.getElementById('error-container');
+        const loadingBar = document.getElementById('loading-bar');
+        const startButton = document.getElementById('start-button');
+        
+        // Set up toggle button
+        debugToggle.addEventListener('click', () => {
+            const isVisible = debugContainer.style.display !== 'none';
+            debugContainer.style.display = isVisible ? 'none' : 'block';
+            debugToggle.textContent = isVisible ? 'Show Debug' : 'Hide Debug';
         });
         
-        function startLoading() {
-            const loadingBar = document.getElementById('loading-bar');
-            const loadingScreen = document.getElementById('loading-screen');
-            const startButton = document.getElementById('start-button');
+        // Override console methods
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        const originalConsoleWarn = console.warn;
+        
+        function addDebugMessage(message, type = 'log') {
+            if (!debugContainer) return;
             
+            // Create paragraph for the message
+            const p = document.createElement('p');
+            p.textContent = message;
+            
+            // Add color based on message type
+            if (type === 'error') {
+                p.style.color = '#ff6666';
+            } else if (type === 'warn') {
+                p.style.color = '#ffaa00';
+            }
+            
+            // Add to container and scroll to bottom
+            debugContainer.appendChild(p);
+            debugContainer.scrollTop = debugContainer.scrollHeight;
+            
+            // Limit number of messages
+            while (debugContainer.childNodes.length > 50) {
+                debugContainer.removeChild(debugContainer.firstChild);
+            }
+        }
+        
+        // Override console.log
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '));
+        };
+        
+        // Override console.error
+        console.error = function(...args) {
+            originalConsoleError.apply(console, args);
+            addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '), 'error');
+        };
+        
+        // Override console.warn
+        console.warn = function(...args) {
+            originalConsoleWarn.apply(console, args);
+            addDebugMessage(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' '), 'warn');
+        };
+        
+        // Clear previous messages
+        debugContainer.innerHTML = '<p style="color:#00ffaa">Debug Console Initialized</p>';
+        
+        function showError(message) {
+            console.error(message);
+            
+            if (errorContainer) {
+                errorContainer.style.display = 'block';
+                errorContainer.innerHTML = `
+                    <h3>Error Loading Game</h3>
+                    <p>${message}</p>
+                    <button onclick="location.reload()">Retry</button>
+                `;
+            }
+            
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
+        }
+        
+        function startLoading() {
+            // Show progress as the JS modules load
             let progress = 0;
-            const loadingInterval = setInterval(() => {
-                progress += Math.random() * 10;
+            loadingStatus.textContent = 'Loading game modules...';
+            
+            const progressInterval = setInterval(() => {
+                progress += 2;
                 if (progress >= 100) {
+                    clearInterval(progressInterval);
                     progress = 100;
-                    clearInterval(loadingInterval);
-                    
-                    // Show start button
-                    document.querySelector('#loading-screen p').textContent = 'Ready to play!';
+                    loadingStatus.textContent = 'Ready to play!';
                     startButton.style.display = 'block';
                 }
                 loadingBar.style.width = `${progress}%`;
-            }, 200);
+            }, 100);
             
-            // Add start button event listener
+            // Set up start button event listener
             startButton.addEventListener('click', () => {
-                // Hide loading screen
+                const loadingScreen = document.getElementById('loading-screen');
                 loadingScreen.style.display = 'none';
                 
-                // Global event to signal the game can start
-                window.dispatchEvent(new Event('gamestart'));
+                // Load the main script
+                import('/src/main.js')
+                    .then(() => {
+                        console.log("Game module loaded successfully");
+                    })
+                    .catch(error => {
+                        console.error("Failed to load game module:", error);
+                        showError("Failed to load game. Please check console for details.");
+                    });
             });
         }
+        
+        // Start loading on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', startLoading);
     </script>
 </body>
 </html> 

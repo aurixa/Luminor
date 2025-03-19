@@ -3,14 +3,32 @@
  * Code written by a mixture of AI (2025)
  */
 
+// Import THREE and dependencies properly as ES modules
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { createPlanet } from './planet.js';
 import { setupPlayer } from './player.js';
 import { setupPhysicsPlayer } from './physicsPlayer.js';
 import { setupResources } from './resources.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
+
+// Helper functions for vector validation
+function isValidVector(vector) {
+    if (!vector) return false;
+    if (typeof vector.x !== 'number' || isNaN(vector.x)) return false;
+    if (typeof vector.y !== 'number' || isNaN(vector.y)) return false;
+    if (typeof vector.z !== 'number' || isNaN(vector.z)) return false;
+    return true;
+}
+
+function vectorToString(vector) {
+    if (!vector) return "null";
+    return `{x: ${vector.x}, y: ${vector.y}, z: ${vector.z}}`;
+}
+
+// Create a namespace for our game
+window.Luminor = window.Luminor || {};
 
 // Use physics-based player
 const USE_PHYSICS = true;
@@ -29,266 +47,424 @@ console.log("========== LUMINOR GAME ==========");
 console.log("Welcome to Luminor - Dark Orbit");
 console.log("Game initializing...");
 
-// Check THREE.js status
-if (typeof THREE === 'undefined') {
-    console.error("THREE.js not found! Game cannot run without THREE.js");
-    createFallbackScene("THREE.js library could not be loaded.");
-    throw new Error("THREE.js not found");
-} else {
-    console.log("THREE.js loaded successfully (version: " + THREE.REVISION + ")");
+// Create a function to handle initializing the game
+function initializeGame() {
+    // Verify THREE.js is available (should be loaded via import)
+    if (typeof THREE === 'undefined') {
+        showFatalError("THREE.js library could not be loaded.");
+        return false;
+    } else {
+        console.log("THREE.js loaded successfully (version: " + THREE.REVISION + ")");
+    }
+    
+    // SimplexNoise check is no longer needed since we use our own implementation in planet.js
+    
+    return true;
 }
 
-// Check SimplexNoise status - look in both global and window scope
-const SimplexNoiseImpl = typeof SimplexNoise !== 'undefined' ? SimplexNoise : 
-                        (typeof window !== 'undefined' && window.SimplexNoise ? window.SimplexNoise : null);
+/**
+ * Display a fatal error message
+ */
+function showFatalError(message) {
+    console.error(message);
+    
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.style.display = 'block';
+        errorContainer.innerHTML = `
+            <h3>Luminor - Initialization Error</h3>
+            <p>${message}</p>
+            <p>Please check the debug console for more information.</p>
+            <button onclick="location.reload()">Retry</button>
+        `;
+    }
+    
+    // Hide loading screen if it exists
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
+    
+    // Create a simple fallback scene to show something
+    createFallbackScene(message);
+}
 
-if (!SimplexNoiseImpl) {
-    console.error("SimplexNoise not found! Cannot generate terrain.");
-    createFallbackScene("SimplexNoise library could not be loaded.");
-    throw new Error("SimplexNoise not found");
-} else {
-    console.log("SimplexNoise implementation found");
+/**
+ * Create a simple fallback scene with error message
+ */
+function createFallbackScene(message) {
+    console.log("Creating fallback scene display");
+    
     try {
-        const testNoise = new SimplexNoiseImpl();
-        const testValue = testNoise.noise3d(1, 2, 3);
-        if (typeof testValue !== 'number' || isNaN(testValue)) {
-            throw new Error("Invalid noise value: " + testValue);
+        // Create a simple scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000011); // Dark blue background
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Create a colored cube
+        const geometry = new THREE.BoxGeometry(2, 2, 2);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffaa });  // Green
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+        
+        // Create error message overlay
+        const errorDiv = document.createElement('div');
+        errorDiv.style.position = 'absolute';
+        errorDiv.style.top = '40%';
+        errorDiv.style.left = '50%';
+        errorDiv.style.transform = 'translate(-50%, -50%)';
+        errorDiv.style.color = 'white';
+        errorDiv.style.padding = '20px';
+        errorDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        errorDiv.style.borderRadius = '10px';
+        errorDiv.style.maxWidth = '600px';
+        errorDiv.style.textAlign = 'center';
+        errorDiv.style.boxShadow = '0 0 20px rgba(0, 255, 170, 0.5)';
+        errorDiv.innerHTML = `
+            <h2 style="color: #00ffaa; margin-top: 0;">Luminor - Initialization Error</h2>
+            <p style="margin: 15px 0;">${message}</p>
+            <p style="font-size: 0.9em; margin-top: 20px;">Please check the debug console for more information.</p>
+        `;
+        document.body.appendChild(errorDiv);
+        
+        // Simple animation function
+        function animate() {
+            requestAnimationFrame(animate);
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+            renderer.render(scene, camera);
         }
-        console.log("SimplexNoise test successful");
-        // Make it globally available
-        window.SimplexNoise = SimplexNoiseImpl;
+        
+        // Start animation
+        animate();
     } catch (e) {
-        console.error("Error testing SimplexNoise:", e);
-        createFallbackScene("Error testing SimplexNoise: " + e.message);
-        throw e;
+        console.error("Could not create fallback scene:", e);
+        // Display a very basic text error as a last resort
+        document.body.innerHTML = `
+            <div style="color: white; text-align: center; margin-top: 100px; font-family: Arial;">
+                <h1>Error Loading Luminor</h1>
+                <p>${message}</p>
+                <p>Additionally failed to create fallback scene: ${e.message}</p>
+            </div>
+        `;
     }
 }
 
-// Initialize Three.js scene
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000011); // Dark blue background
-console.log("Scene created");
+// Initialize the game
+if (!initializeGame()) {
+    console.error("Game initialization failed!");
+} else {
+    // Wrap the game setup in a function
+    function setupGame() {
+        // Initialize Three.js scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000011); // Dark blue background
+        console.log("Scene created");
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-console.log("Camera created with FOV:", camera.fov);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        console.log("Camera created with FOV:", camera.fov);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
-document.body.appendChild(renderer.domElement);
-console.log("Renderer created and added to DOM");
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        console.log("Renderer created and added to DOM");
 
-// Position camera much closer - only 100 units away
-camera.position.set(0, 0, 150);
-camera.lookAt(0, 0, 0);
+        // Position camera much closer - only 100 units away
+        camera.position.set(0, 0, 150);
+        camera.lookAt(0, 0, 0);
 
-// Camera configuration
-const CAMERA_DISTANCE = 60;    // Increased distance to see more of the terrain
-const CAMERA_HEIGHT = 60;      // Reduced height for better terrain alignment
-const CAMERA_SMOOTHNESS = 0.08; // Slightly reduced for more responsive camera over terrain
-const CAMERA_FORWARD_OFFSET = 20; // Increased to see more of upcoming terrain
+        // Camera configuration
+        const CAMERA_DISTANCE = 60;
+        const CAMERA_HEIGHT = 60;
+        const CAMERA_SMOOTHNESS = 0.08;
+        const CAMERA_FORWARD_OFFSET = 20;
 
-// Add ambient light for base illumination
-const ambientLight = new THREE.AmbientLight(0x666666, 0.7); // Brighter ambient for better terrain visibility
-scene.add(ambientLight);
+        // Add lights
+        setupLights(scene, camera);
 
-// Add directional light (sun)
-const sunLight = new THREE.DirectionalLight(0xffffdd, 1.4); // Warmer sunlight
-sunLight.position.set(200, 100, 200); // Position further away for the larger planet
-sunLight.castShadow = true;
+        // Debug controls
+        let orbitControls = setupDebugControls(camera, renderer);
 
-// Optimize shadow settings for larger planet
-sunLight.shadow.mapSize.width = 4096;
-sunLight.shadow.mapSize.height = 4096;
-sunLight.shadow.camera.near = 0.5;
-sunLight.shadow.camera.far = 1000;
-sunLight.shadow.camera.left = -150;
-sunLight.shadow.camera.right = 150;
-sunLight.shadow.camera.top = 150;
-sunLight.shadow.camera.bottom = -150;
-sunLight.shadow.bias = -0.0001;
+        // Create the planet first and ensure it's ready
+        console.log("Creating planet...");
+        const planet = createPlanet(scene);
 
-scene.add(sunLight);
+        // Check if planet creation was successful
+        if (!planet || !planet.mesh || !planet.radius) {
+            showFatalError("Failed to create planet properly");
+            return false;
+        }
 
-// Add a subtle point light at the camera for better visibility
-const cameraLight = new THREE.PointLight(0xffffee, 0.7);
-camera.add(cameraLight);
-scene.add(camera);
+        // Initialize physics world with planet gravity
+        console.log("Initializing physics world...");
+        const physicsWorld = new PhysicsWorld({
+            gravity: -9.81,
+            planetRadius: planet.radius
+        });
 
-// Debug controls - will be disabled during gameplay
-let orbitControls = null;
-setupDebugControls();
+        // Create the player
+        console.log("Setting up player...");
+        let player = null;
+        try {
+            player = setupPhysicsPlayer(scene, planet, camera, physicsWorld);
+            if (!player) {
+                throw new Error("Failed to create player");
+            }
+        } catch (error) {
+            console.error("Error setting up player:", error);
+            showFatalError("Failed to initialize player properly");
+            return false;
+        }
 
-function setupDebugControls() {
-    orbitControls = new OrbitControls(camera, renderer.domElement);
+        // Initialize resources
+        console.log("Setting up resources...");
+        const resources = setupResources(scene, planet);
+
+        // Setup UI elements
+        setupUI();
+
+        // Create starfield
+        const starField = createStarField(scene);
+
+        // Setup animation loop
+        function animate(timestamp) {
+            try {
+                // Update physics world first
+                if (physicsWorld) {
+                    physicsWorld.update(1/60);
+                }
+                
+                // Update player if it exists and is properly initialized
+                if (player && player.update) {
+                    const playerState = player.update(1/60);
+                    if (playerState && isValidVector(playerState.position)) {
+                        updateCameraPosition(playerState, camera, planet);
+                    }
+                }
+                
+                // Update resources
+                if (resources) {
+                    resources.update(1/60);
+                }
+                
+                // Render the scene
+                renderer.render(scene, camera);
+                
+                // Continue animation loop
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error("Error in animation loop:", error);
+            }
+        }
+
+        // Start the animation loop
+        animate();
+        return true;
+    }
+
+    // Run the game setup
+    if (!setupGame()) {
+        console.error("Game setup failed!");
+    }
+}
+
+// Helper function to setup lights
+function setupLights(scene, camera) {
+    const ambientLight = new THREE.AmbientLight(0x666666, 0.7);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffdd, 1.4);
+    sunLight.position.set(200, 100, 200);
+    sunLight.castShadow = true;
+    setupShadowSettings(sunLight);
+    scene.add(sunLight);
+
+    const cameraLight = new THREE.PointLight(0xffffee, 0.7);
+    camera.add(cameraLight);
+    scene.add(camera);
+}
+
+// Helper function to setup shadow settings
+function setupShadowSettings(light) {
+    light.shadow.mapSize.width = 4096;
+    light.shadow.mapSize.height = 4096;
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 1000;
+    light.shadow.camera.left = -150;
+    light.shadow.camera.right = 150;
+    light.shadow.camera.top = 150;
+    light.shadow.camera.bottom = -150;
+    light.shadow.bias = -0.0001;
+}
+
+// Helper function to setup debug controls
+function setupDebugControls(camera, renderer) {
+    let orbitControls = new OrbitControls(camera, renderer.domElement);
     orbitControls.enableDamping = true;
     orbitControls.dampingFactor = 0.05;
     orbitControls.enabled = !gameState.isPlaying;
+    return orbitControls;
 }
 
-// Create the planet
-let planet = createPlanet(scene);
+// Helper function to setup UI elements
+function setupUI() {
+    // Create score display
+    const scoreDisplay = document.createElement('div');
+    scoreDisplay.style.position = 'absolute';
+    scoreDisplay.style.top = '20px';
+    scoreDisplay.style.right = '20px';
+    scoreDisplay.style.color = 'white';
+    scoreDisplay.style.fontSize = '24px';
+    scoreDisplay.style.fontFamily = 'Arial, sans-serif';
+    scoreDisplay.style.textShadow = '0 0 5px #000';
+    scoreDisplay.style.display = 'none';
+    document.body.appendChild(scoreDisplay);
 
-// Initialize game elements
-let player = null;
-let resources = null;
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-// Create score display
-const scoreDisplay = document.createElement('div');
-scoreDisplay.style.position = 'absolute';
-scoreDisplay.style.top = '20px';
-scoreDisplay.style.right = '20px';
-scoreDisplay.style.color = 'white';
-scoreDisplay.style.fontSize = '24px';
-scoreDisplay.style.fontFamily = 'Arial, sans-serif';
-scoreDisplay.style.textShadow = '0 0 5px #000';
-scoreDisplay.style.display = 'none';
-document.body.appendChild(scoreDisplay);
+    // Create controls info display
+    const controlsInfo = document.createElement('div');
+    controlsInfo.style.position = 'absolute';
+    controlsInfo.style.bottom = '20px';
+    controlsInfo.style.left = '20px';
+    controlsInfo.style.color = 'white';
+    controlsInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    controlsInfo.style.padding = '10px';
+    controlsInfo.style.borderRadius = '5px';
+    controlsInfo.style.fontFamily = 'Arial, sans-serif';
+    controlsInfo.style.display = 'none';
+    controlsInfo.innerHTML = `
+    <h3>Controls:</h3>
+    <p>← Left Arrow / A: Turn Left</p>
+    <p>→ Right Arrow / D: Turn Right</p>
+    <p>T: Toggle terrain adjustment panel</p>
+    `;
+    document.body.appendChild(controlsInfo);
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+    // Create a terrain adjustment panel
+    const terrainPanel = document.createElement('div');
+    terrainPanel.style.position = 'absolute';
+    terrainPanel.style.top = '20px';
+    terrainPanel.style.left = '20px';
+    terrainPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    terrainPanel.style.padding = '15px';
+    terrainPanel.style.borderRadius = '8px';
+    terrainPanel.style.color = 'white';
+    terrainPanel.style.fontFamily = 'Arial, sans-serif';
+    terrainPanel.style.width = '250px';
+    terrainPanel.style.display = 'none';
+    terrainPanel.style.zIndex = '1000';
+    terrainPanel.innerHTML = `
+    <h3 style="margin-top:0">Terrain Adjustments</h3>
+    <div class="slider-container">
+      <label>Height Scale</label>
+      <input type="range" id="height-scale" min="0.02" max="0.2" step="0.01" value="0.12">
+      <span id="height-scale-value">0.12</span>
+    </div>
+    <div class="slider-container">
+      <label>Roughness</label>
+      <input type="range" id="roughness" min="0.1" max="1.5" step="0.1" value="0.8">
+      <span id="roughness-value">0.8</span>
+    </div>
+    <div class="slider-container">
+      <label>Large Scale Influence</label>
+      <input type="range" id="large-scale" min="0.1" max="0.9" step="0.1" value="0.5">
+      <span id="large-scale-value">0.5</span>
+    </div>
+    <div class="slider-container">
+      <label>Medium Scale Influence</label>
+      <input type="range" id="medium-scale" min="0.1" max="0.9" step="0.1" value="0.4">
+      <span id="medium-scale-value">0.4</span>
+    </div>
+    <div class="slider-container">
+      <label>Small Scale Influence</label>
+      <input type="range" id="small-scale" min="0" max="0.4" step="0.05" value="0.1">
+      <span id="small-scale-value">0.1</span>
+    </div>
+    <div style="margin-top:10px">
+      <button id="apply-terrain">Apply Changes</button>
+      <button id="reset-terrain">Reset</button>
+    </div>
+    `;
+    document.body.appendChild(terrainPanel);
 
-// Create starfield
-const starField = createStarField();
-
-// Add stats for debugging
-const stats = new Stats();
-document.body.appendChild(stats.dom);
-
-// Create controls info display
-const controlsInfo = document.createElement('div');
-controlsInfo.style.position = 'absolute';
-controlsInfo.style.bottom = '20px';
-controlsInfo.style.left = '20px';
-controlsInfo.style.color = 'white';
-controlsInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-controlsInfo.style.padding = '10px';
-controlsInfo.style.borderRadius = '5px';
-controlsInfo.style.fontFamily = 'Arial, sans-serif';
-controlsInfo.style.display = 'none';
-controlsInfo.innerHTML = `
-<h3>Controls:</h3>
-<p>← Left Arrow / A: Turn Left</p>
-<p>→ Right Arrow / D: Turn Right</p>
-<p>T: Toggle terrain adjustment panel</p>
-`;
-document.body.appendChild(controlsInfo);
-
-// Create a terrain adjustment panel
-const terrainPanel = document.createElement('div');
-terrainPanel.style.position = 'absolute';
-terrainPanel.style.top = '20px';
-terrainPanel.style.left = '20px';
-terrainPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-terrainPanel.style.padding = '15px';
-terrainPanel.style.borderRadius = '8px';
-terrainPanel.style.color = 'white';
-terrainPanel.style.fontFamily = 'Arial, sans-serif';
-terrainPanel.style.width = '250px';
-terrainPanel.style.display = 'none';
-terrainPanel.style.zIndex = '1000';
-terrainPanel.innerHTML = `
-<h3 style="margin-top:0">Terrain Adjustments</h3>
-<div class="slider-container">
-  <label>Height Scale</label>
-  <input type="range" id="height-scale" min="0.02" max="0.2" step="0.01" value="0.12">
-  <span id="height-scale-value">0.12</span>
-</div>
-<div class="slider-container">
-  <label>Roughness</label>
-  <input type="range" id="roughness" min="0.1" max="1.5" step="0.1" value="0.8">
-  <span id="roughness-value">0.8</span>
-</div>
-<div class="slider-container">
-  <label>Large Scale Influence</label>
-  <input type="range" id="large-scale" min="0.1" max="0.9" step="0.1" value="0.5">
-  <span id="large-scale-value">0.5</span>
-</div>
-<div class="slider-container">
-  <label>Medium Scale Influence</label>
-  <input type="range" id="medium-scale" min="0.1" max="0.9" step="0.1" value="0.4">
-  <span id="medium-scale-value">0.4</span>
-</div>
-<div class="slider-container">
-  <label>Small Scale Influence</label>
-  <input type="range" id="small-scale" min="0" max="0.4" step="0.05" value="0.1">
-  <span id="small-scale-value">0.1</span>
-</div>
-<div style="margin-top:10px">
-  <button id="apply-terrain">Apply Changes</button>
-  <button id="reset-terrain">Reset</button>
-</div>
-`;
-document.body.appendChild(terrainPanel);
-
-// Add style for the sliders
-const style = document.createElement('style');
-style.textContent = `
-.slider-container {
-  margin-bottom: 8px;
-}
-.slider-container label {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 14px;
-}
-.slider-container input {
-  width: 180px;
-  vertical-align: middle;
-}
-.slider-container span {
-  display: inline-block;
-  width: 40px;
-  text-align: right;
-  font-size: 14px;
-}
-button {
-  background-color: #00ffaa;
-  border: none;
-  color: #000;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: 8px;
-}
-button:hover {
-  background-color: #00cc88;
-}
-`;
-document.head.appendChild(style);
-
-// Toggle terrain panel with T key
-window.addEventListener('keydown', (event) => {
-    if (event.key === 't' || event.key === 'T') {
-        terrainPanel.style.display = terrainPanel.style.display === 'none' ? 'block' : 'none';
+    // Add style for the sliders
+    const style = document.createElement('style');
+    style.textContent = `
+    .slider-container {
+      margin-bottom: 8px;
     }
-});
+    .slider-container label {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 14px;
+    }
+    .slider-container input {
+      width: 180px;
+      vertical-align: middle;
+    }
+    .slider-container span {
+      display: inline-block;
+      width: 40px;
+      text-align: right;
+      font-size: 14px;
+    }
+    button {
+      background-color: #00ffaa;
+      border: none;
+      color: #000;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    button:hover {
+      background-color: #00cc88;
+    }
+    `;
+    document.head.appendChild(style);
 
-// Wait for DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Setup UI interaction
-    const startButton = document.getElementById('start-button');
-    if (startButton) {
-        startButton.addEventListener('click', startGame);
-    }
-    
-    const restartButton = document.getElementById('restart-button');
-    if (restartButton) {
-        restartButton.addEventListener('click', startGame);
-    }
-    
-    // Setup terrain panel interactions
-    setupTerrainPanelControls();
-});
+    // Toggle terrain panel with T key
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 't' || event.key === 'T') {
+            terrainPanel.style.display = terrainPanel.style.display === 'none' ? 'block' : 'none';
+        }
+    });
+
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        // Setup UI interaction
+        const startButton = document.getElementById('start-button');
+        if (startButton) {
+            startButton.addEventListener('click', startGame);
+        }
+        
+        const restartButton = document.getElementById('restart-button');
+        if (restartButton) {
+            restartButton.addEventListener('click', startGame);
+        }
+        
+        // Setup terrain panel interactions
+        setupTerrainPanelControls();
+    });
+}
 
 /**
  * Create a star field background
  */
-function createStarField() {
+function createStarField(scene) {
     const starCount = 4000;
     const starGeometry = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
@@ -353,342 +529,45 @@ function createStarField() {
     return starField;
 }
 
-/**
- * Animation loop
- */
-function animate() {
-    requestAnimationFrame(animate);
-    
-    stats.begin();
-    
-    // Update game logic if playing
-    if (gameState.isPlaying && player && resources) {
-        // Calculate delta time for smooth animation
-        const now = performance.now();
-        const deltaTime = now - (lastTime || now);
-        lastTime = now;
-        
-        // Get current player state for camera
-        let playerState;
-        
-        // Update player - different update methods for physics vs standard player
-        if (USE_PHYSICS) {
-            // Physics player returns the player state directly
-            playerState = player.update(deltaTime / 1000); // Convert to seconds for physics
-        } else {
-            // Standard player needs to be queried for state
-            player.update();
-            playerState = {
-                position: player.getHeadPosition(),
-                direction: player.getCurrentDirection(),
-                up: player.getHeadPosition().clone().normalize()
-            };
+// Animation loop
+function animate(timestamp) {
+    try {
+        // Update physics world first
+        if (physicsWorld) {
+            physicsWorld.update(1/60); // Fixed timestep
         }
         
-        // Update camera position to follow player
-        updateCameraPosition(playerState);
-        
-        // Update resources
-        resources.update(deltaTime);
-        
-        // Check for resource collection
-        for (let i = 0; i < resources.items.length; i++) {
-            const resource = resources.items[i];
-            if (resource.active && player.checkCollision(resource.position, resource.radius)) {
-                // Collect the resource
-                resource.collect();
-                
-                // Increment score
-                gameState.score += 10;
-                
-                // Update the score display
-                updateScoreDisplay();
-                
-                // Grow the player
-                if (gameState.score % 30 === 0) { // Grow every 3 resources
-                    player.addSegment();
-                    gameState.playerLength = player.length;
-                }
+        // Update player if it exists and is properly initialized
+        if (player && player.update) {
+            const playerState = player.update(1/60);
+            
+            // Validate player state before using it
+            if (playerState && isValidVector(playerState.position)) {
+                // Update camera position
+                updateCameraPosition(playerState);
+            } else {
+                console.warn("Invalid player state:", 
+                    playerState ? vectorToString(playerState.position) : "null"
+                );
             }
         }
         
-        // Update clouds
-        if (planet && planet.clouds) {
-            planet.clouds.rotation.y += 0.0001;
+        // Update resources
+        if (resources) {
+            resources.update(1/60);
         }
-    } else if (orbitControls) {
-        // Update orbit controls when not playing
-        orbitControls.update();
+        
+        // Render the scene
+        renderer.render(scene, camera);
+        
+        // Continue animation loop
+        requestAnimationFrame(animate);
+    } catch (error) {
+        console.error("Error in animation loop:", error);
     }
-    
-    // Render the scene
-    renderer.render(scene, camera);
-    
-    stats.end();
 }
 
-// Store last time for deltaTime calculation
-let lastTime = null;
-
-/**
- * Update camera position to follow player
- */
-function updateCameraPosition(playerState) {
-    if (!playerState) return;
-    
-    // Get the player's position, direction and up vector (planet normal)
-    const playerPos = playerState.position.clone();
-    const playerDir = playerState.direction.clone();
-    const up = playerPos.clone().normalize(); // Normal at player position
-    
-    // Calculate the right vector
-    const right = new THREE.Vector3().crossVectors(playerDir, up).normalize();
-    
-    // Recalculate forward to ensure orthogonality with up
-    const forward = new THREE.Vector3().crossVectors(up, right).normalize();
-    
-    // Calculate terrain slope at player position and in forward direction
-    // Check points in front and behind to estimate slope orientation
-    const forwardCheckDist = 20; // Distance to check forward
-    const forwardPoint = playerPos.clone().add(forward.clone().multiplyScalar(forwardCheckDist));
-    
-    // Use terrain data to get actual surface points
-    // We need to access planet object and surface functions
-    const planetRadius = planet.radius;
-    const forwardSurfacePoint = planet.getNearestPointOnSurface(forwardPoint);
-    
-    // Create slope-adjusted up vector by finding the plane normal of the slope
-    // Get a vector from player position to forward terrain point
-    const playerToForward = forwardSurfacePoint.clone().sub(playerPos);
-    
-    // Calculated slope-aligned camera axis
-    // We create a camera orientation that's aligned with the slope
-    let slopeRight = right.clone(); // Keep the same right vector
-    
-    // Calculate slope-aligned up that's perpendicular to the movement direction
-    // This is a weighted blend between straight up and slope-following
-    let slopeUp = up.clone();
-    
-    // Project forward direction onto the plane perpendicular to up
-    // This gives us the tangent to the planet surface in player's direction
-    const surfaceTangent = forward.clone()
-        .sub(up.clone().multiplyScalar(forward.dot(up)))
-        .normalize();
-    
-    // Get the angle between forward on a flat surface and actual forward point
-    const surfaceToForward = forwardSurfacePoint.clone().sub(
-        playerPos.clone().add(surfaceTangent.clone().multiplyScalar(forwardCheckDist))
-    );
-    
-    // Calculate a slope factor - how steep is the terrain ahead?
-    // Higher value means steeper uphill/downhill
-    const slopeDot = surfaceTangent.dot(surfaceToForward.normalize());
-    const slopeAngle = Math.asin(Math.min(1, Math.max(-1, slopeDot)));
-    
-    // Normalize to 0-1 range where 0.5 is flat, >0.5 is uphill, <0.5 is downhill
-    const normalizedSlope = (slopeAngle / (Math.PI/4)) + 0.5;
-    
-    // Adjust camera height based on slope
-    // We want the camera lower when going uphill and higher when going downhill
-    let dynamicHeight = CAMERA_HEIGHT;
-    let dynamicDistance = CAMERA_DISTANCE;
-    
-    if (normalizedSlope > 0.55) {
-        // Going uphill - lower the camera
-        dynamicHeight = CAMERA_HEIGHT * (1 - (normalizedSlope - 0.55) * 1.5);
-        dynamicDistance = CAMERA_DISTANCE * (1 + (normalizedSlope - 0.55) * 0.5);
-    } else if (normalizedSlope < 0.45) {
-        // Going downhill - raise the camera and move it back
-        dynamicHeight = CAMERA_HEIGHT * (1 + (0.45 - normalizedSlope) * 0.5);
-        dynamicDistance = CAMERA_DISTANCE * (1 + (0.45 - normalizedSlope) * 0.5);
-    }
-    
-    // Adjust the actual camera position based on slope
-    // Calculate base camera position behind player
-    const cameraDirection = playerDir.clone().negate();
-    
-    // Create a position behind and above the player, adjusted for slope
-    const idealPosition = playerPos.clone()
-        .add(cameraDirection.multiplyScalar(dynamicDistance))
-        .add(up.multiplyScalar(dynamicHeight));
-    
-    // Smooth transition to ideal camera position
-    camera.position.lerp(idealPosition, CAMERA_SMOOTHNESS);
-    
-    // Look ahead of player, adjusted based on slope
-    // Look slightly farther ahead when going downhill to see upcoming terrain
-    let forwardOffset = CAMERA_FORWARD_OFFSET;
-    if (normalizedSlope < 0.5) {
-        // Going downhill, look farther ahead
-        forwardOffset *= (1 + (0.5 - normalizedSlope) * 2);
-    }
-    
-    const lookTarget = playerPos.clone().add(
-        playerDir.clone().multiplyScalar(forwardOffset)
-    );
-    
-    camera.lookAt(lookTarget);
-    
-    // Set camera up direction to match planet normal at player position
-    camera.up.copy(up);
-}
-
-/**
- * Start the game
- */
-function startGame() {
-    // Hide loading screen and button if they exist
-    const loadingScreen = document.getElementById('loading-screen');
-    if (loadingScreen) {
-        loadingScreen.style.display = 'none';
-    }
-    
-    // Remove any debug fallback content
-    const fallbackContent = document.getElementById('fallback-content');
-    if (fallbackContent) {
-        fallbackContent.style.display = 'none';
-    }
-    
-    // Show game UI elements
-    controlsInfo.style.display = 'block';
-    scoreDisplay.style.display = 'block';
-    
-    // Reset game state
-    gameState.isPlaying = true;
-    gameState.score = 0;
-    gameState.playerLength = 1;
-    
-    // Disable orbit controls
-    if (orbitControls) {
-        orbitControls.enabled = false;
-    }
-    
-    // Create physics world
-    let physicsWorld = null;
-    if (USE_PHYSICS) {
-        physicsWorld = new PhysicsWorld();
-        console.log("Physics world created");
-    }
-    
-    // Create player using the appropriate player setup function
-    if (player) {
-        player.reset();
-    } else {
-        if (USE_PHYSICS) {
-            // Use physics-based player
-            player = setupPhysicsPlayer(scene, planet, camera, physicsWorld);
-        } else {
-            // Use standard player
-            player = setupPlayer(scene, planet, camera);
-        }
-    }
-    
-    // Create resources
-    if (!resources) {
-        resources = setupResources(scene, planet);
-    } else {
-        resources.reset();
-    }
-    
-    // Update score display
-    updateScoreDisplay();
-    
-    console.log("Game started!");
-}
-
-// End the game
-function endGame() {
-    gameState.isPlaying = false;
-    
-    // Re-enable orbit controls for free camera movement
-    if (orbitControls) {
-        orbitControls.enabled = true;
-    }
-    
-    // Hide score display
-    scoreDisplay.style.display = 'none';
-    controlsInfo.style.display = 'none';
-    
-    alert(`Game Over! Score: ${gameState.score}`);
-}
-
-// Setup terrain panel
-function setupTerrainPanelControls() {
-    // Update value displays when sliders change
-    document.getElementById('height-scale').addEventListener('input', function() {
-        document.getElementById('height-scale-value').textContent = this.value;
-    });
-    
-    document.getElementById('roughness').addEventListener('input', function() {
-        document.getElementById('roughness-value').textContent = this.value;
-    });
-    
-    document.getElementById('large-scale').addEventListener('input', function() {
-        document.getElementById('large-scale-value').textContent = this.value;
-    });
-    
-    document.getElementById('medium-scale').addEventListener('input', function() {
-        document.getElementById('medium-scale-value').textContent = this.value;
-    });
-    
-    document.getElementById('small-scale').addEventListener('input', function() {
-        document.getElementById('small-scale-value').textContent = this.value;
-    });
-    
-    // Apply button updates the terrain parameters
-    document.getElementById('apply-terrain').addEventListener('click', function() {
-        if (!planet) return;
-        
-        // Get values from sliders
-        const heightScale = parseFloat(document.getElementById('height-scale').value);
-        const roughness = parseFloat(document.getElementById('roughness').value);
-        const largeScale = parseFloat(document.getElementById('large-scale').value);
-        const mediumScale = parseFloat(document.getElementById('medium-scale').value);
-        const smallScale = parseFloat(document.getElementById('small-scale').value);
-        
-        // Update parameters
-        planet.updateTerrainParams({
-            heightScale: heightScale,
-            roughness: roughness,
-            largeScale: { influence: largeScale },
-            mediumScale: { influence: mediumScale },
-            smallScale: { influence: smallScale }
-        });
-        
-        // We would rebuild the planet here, but for this simple demo
-        // we'll just restart the game to regenerate the planet
-        alert("To see changes, the game will restart with new terrain settings");
-        startGame();
-    });
-    
-    // Reset button resets to defaults
-    document.getElementById('reset-terrain').addEventListener('click', function() {
-        document.getElementById('height-scale').value = 0.12;
-        document.getElementById('height-scale-value').textContent = 0.12;
-        
-        document.getElementById('roughness').value = 0.8;
-        document.getElementById('roughness-value').textContent = 0.8;
-        
-        document.getElementById('large-scale').value = 0.5;
-        document.getElementById('large-scale-value').textContent = 0.5;
-        
-        document.getElementById('medium-scale').value = 0.4;
-        document.getElementById('medium-scale-value').textContent = 0.4;
-        
-        document.getElementById('small-scale').value = 0.1;
-        document.getElementById('small-scale-value').textContent = 0.1;
-    });
-}
-
-/**
- * Update the score display
- */
-function updateScoreDisplay() {
-    scoreDisplay.textContent = `Score: ${gameState.score}`;
-}
-
-// Start animation loop
-console.log("Starting animation loop");
+// Start the animation loop
 animate();
 
 // On window load, start the game

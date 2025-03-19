@@ -38,32 +38,22 @@ export function setupPhysicsPlayer(scene, planet, camera, existingPhysicsWorld =
     const headMaterial = createGlowingMaterial(0x00ffaa, GLOW_INTENSITY);
     const headMesh = new THREE.Mesh(headGeometry, headMaterial);
     
-    // Set initial position on the planet surface
-    let initialPosition;
-    
-    try {
-        // Try to find a valid surface position
-        const testPoint = new THREE.Vector3(planet.radius * 1.5, 0, 0);
-        const surfacePoint = planet.getNearestPointOnSurface(testPoint);
-        initialPosition = surfacePoint.clone().normalize()
-            .multiplyScalar(surfacePoint.length() + 7.0); // Hover height
-        console.log("Found initial position on surface:", initialPosition);
-    } catch (e) {
-        // Fallback to a safe default position
-        console.error("Error finding surface position:", e);
-        initialPosition = new THREE.Vector3(planet.radius + 7.0, 0, 0);
-        console.log("Using fallback initial position:", initialPosition);
-    }
-    
-    // Set the position of the head mesh
-    headMesh.position.copy(initialPosition);
+    // Set a temporary initial position off-screen
+    headMesh.position.set(0, -1000, 0);
     scene.add(headMesh);
-    console.log("Head mesh added to scene at position:", headMesh.position);
+    console.log("Head mesh added to scene");
     
-    // Create the hover bike physics
+    // Create the hover bike physics first
     console.log("Creating hover bike...");
     const hoverBike = new HoverBike(physicsWorld, planet, headMesh);
     hoverBike.debug.enabled = DEBUG_PHYSICS;
+    
+    // Now update the head mesh position to match the hover bike's position
+    if (hoverBike.body) {
+        const pos = hoverBike.body.position;
+        headMesh.position.set(pos.x, pos.y, pos.z);
+        console.log("Head mesh position updated to match hover bike:", headMesh.position);
+    }
     
     // Create segments array for tail
     const segments = [];
@@ -71,7 +61,7 @@ export function setupPhysicsPlayer(scene, planet, camera, existingPhysicsWorld =
     
     // Add the head as the first segment
     segments.push({
-        position: initialPosition.clone(),
+        position: headMesh.position.clone(),
         mesh: headMesh,
         hoverPhase: Math.random() * Math.PI * 2,
         hoverSpeed: 0.5 + Math.random() * 0.5
