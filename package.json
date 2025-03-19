@@ -1,0 +1,23 @@
+{
+  "name": "luminor",
+  "version": "0.1.0",
+  "description": "3D browser-based game where players navigate a procedurally generated planet collecting energy",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.159.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luminor-game/luminor.git"
+  },
+  "author": "Code written by a mixture of AI (2025)",
+  "license": "MIT"
+} 

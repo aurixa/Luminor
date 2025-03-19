@@ -1,0 +1,32 @@
+<!--
+ Luminor
+ Code written by a mixture of AI (2025)
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luminor - A Procedural Planet Adventure</title>
+    <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div id="start-screen">
+                <h1>LUMINOR</h1>
+                <button id="play-button">PLAY</button>
+            </div>
+            <div id="game-over-screen" class="hidden">
+                <h2>GAME OVER</h2>
+                <div id="stats">
+                    <p>Score: <span id="final-score">0</span></p>
+                    <p>Length: <span id="final-length">0</span></p>
+                </div>
+                <button id="play-again-button">PLAY AGAIN</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html> 
