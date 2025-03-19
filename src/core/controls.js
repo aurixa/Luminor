@@ -22,7 +22,7 @@ const controlState = {
 export function setupControls(player, gameState) {
     // Keyboard event handlers
     function handleKeyDown(event) {
-        if (!gameState.isPlaying) return;
+        if (!gameState.isPlaying || gameState.isPaused) return;
         
         switch (event.key.toLowerCase()) {
             case 'w': 
@@ -89,7 +89,7 @@ export function setupControls(player, gameState) {
     
     // Update player based on control state
     function updatePlayerControls() {
-        if (player && player.setControlState) {
+        if (player && player.setControlState && !gameState.isPaused) {
             player.setControlState(controlState);
         }
     }
@@ -114,7 +114,7 @@ export function setupControls(player, gameState) {
         }, { passive: false });
         
         function handleTouchEvent(event, isStart) {
-            if (!gameState.isPlaying) return;
+            if (!gameState.isPlaying || gameState.isPaused) return;
             
             const touches = event.touches;
             

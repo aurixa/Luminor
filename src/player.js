@@ -223,6 +223,13 @@ export function setupPlayer(scene, planet, camera) {
         segmentMeshes,
         length: 1,
         
+        // Set visibility of the player
+        setVisible: function(visible) {
+            for (const mesh of segmentMeshes) {
+                mesh.visible = visible;
+            }
+        },
+        
         // Update the player's position and segments
         update: function() {
             // Update time

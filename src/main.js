@@ -8,13 +8,15 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createPlanet } from './planet.js';
 import { setupPlayer } from './player.js';
 import { setupResources } from './resources.js';
+import { setupUI } from './ui/interface.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 // Main game state
 const gameState = {
     isPlaying: false,
-    score: 0,
-    playerLength: 1,
+    isPaused: false,
+    playerLength: 3,
+    gameHasEnded: false
 };
 
 // Initialize Three.js scene
@@ -50,48 +52,64 @@ sunLight.shadow.mapSize.width = 4096;
 sunLight.shadow.mapSize.height = 4096;
 sunLight.shadow.camera.near = 0.5;
 sunLight.shadow.camera.far = 1000;
-sunLight.shadow.camera.left = -150;
-sunLight.shadow.camera.right = 150;
-sunLight.shadow.camera.top = 150;
-sunLight.shadow.camera.bottom = -150;
-sunLight.shadow.bias = -0.0001;
 
+// Adjust shadow camera to fit large planet
+const shadowSize = 900;
+sunLight.shadow.camera.left = -shadowSize;
+sunLight.shadow.camera.right = shadowSize;
+sunLight.shadow.camera.top = shadowSize;
+sunLight.shadow.camera.bottom = -shadowSize;
 scene.add(sunLight);
 
-// Add a subtle point light at the camera for better visibility
-const cameraLight = new THREE.PointLight(0xffffee, 0.7);
-camera.add(cameraLight);
-scene.add(camera);
-
-// Debug controls - will be disabled during gameplay
-let orbitControls = null;
-setupDebugControls();
-
-function setupDebugControls() {
-    orbitControls = new OrbitControls(camera, renderer.domElement);
-    orbitControls.enableDamping = true;
-    orbitControls.dampingFactor = 0.05;
-    orbitControls.enabled = !gameState.isPlaying;
-}
+// Add orbit controls for development
+const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.enableDamping = true;
+orbitControls.dampingFactor = 0.05;
+orbitControls.screenSpacePanning = false;
+orbitControls.minDistance = 10;
+orbitControls.maxDistance = 80;
+orbitControls.enabled = false; // Default to disabled during gameplay
 
 // Create the planet
 const planet = createPlanet(scene);
+
+// Add subtle directional light from opposite side (fill light)
+const fillLight = new THREE.DirectionalLight(0x334466, 0.2);
+fillLight.position.set(-200, -50, -200);
+scene.add(fillLight);
+
+// Create the debug panel
+const stats = new Stats();
+stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild(stats.dom);
 
 // Initialize game elements
 let player = null;
 let resources = null;
 
-// Create score display
-const scoreDisplay = document.createElement('div');
-scoreDisplay.style.position = 'absolute';
-scoreDisplay.style.top = '20px';
-scoreDisplay.style.right = '20px';
-scoreDisplay.style.color = 'white';
-scoreDisplay.style.fontSize = '24px';
-scoreDisplay.style.fontFamily = 'Arial, sans-serif';
-scoreDisplay.style.textShadow = '0 0 5px #000';
-scoreDisplay.style.display = 'none';
-document.body.appendChild(scoreDisplay);
+// Set up UI
+let ui;
+// Delay UI setup until DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+    ui = setupUI(gameState, startGame);
+    
+    // Setup UI interaction
+    const startButton = document.getElementById('start-button');
+    if (startButton) {
+        startButton.addEventListener('click', startGame);
+    }
+    
+    const restartButton = document.getElementById('restart-button');
+    if (restartButton) {
+        restartButton.addEventListener('click', () => {
+            // Instead of reloading the page, end the game and show game over screen
+            endGame();
+        });
+    }
+    
+    // Setup terrain panel interactions
+    setupTerrainPanelControls();
+});
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -102,10 +120,6 @@ window.addEventListener('resize', () => {
 
 // Create starfield
 const starField = createStarField();
-
-// Add stats for debugging
-const stats = new Stats();
-document.body.appendChild(stats.dom);
 
 // Create controls info display
 const controlsInfo = document.createElement('div');
@@ -216,23 +230,6 @@ window.addEventListener('keydown', (event) => {
     }
 });
 
-// Wait for DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Setup UI interaction
-    const startButton = document.getElementById('start-button');
-    if (startButton) {
-        startButton.addEventListener('click', startGame);
-    }
-    
-    const restartButton = document.getElementById('restart-button');
-    if (restartButton) {
-        restartButton.addEventListener('click', startGame);
-    }
-    
-    // Setup terrain panel interactions
-    setupTerrainPanelControls();
-});
-
 /**
  * Create a star field background
  */
@@ -315,35 +312,37 @@ function animate() {
         orbitControls.update();
     }
     
-    // Slight starfield rotation for subtle effect
+    // Always rotate starfield (not affected by game state)
     if (starField) {
         starField.rotation.y += 0.00001 * deltaTime;
     }
     
     if (gameState.isPlaying && player) {
-        // Update player and get its current state
-        const playerState = player.update();
-        
-        // Update camera position based on current mode
-        updateCameraPosition(playerState);
-        
-        // Update resources if they exist
+        // Continue updating resources regardless of pause state
         if (resources) {
             resources.update();
             
-            // Check for resource collection
-            const collected = resources.checkCollisions(player);
-            if (collected > 0) {
-                // Increase score and grow player
-                gameState.score += collected;
-                scoreDisplay.textContent = `Score: ${gameState.score}`;
-                player.grow(collected);
+            // Only check collisions if not paused
+            if (!gameState.isPaused) {
+                const collected = resources.checkCollisions(player);
+                if (collected > 0) {
+                    // Increase player length and update UI
+                    gameState.playerLength += collected;
+                    if (ui) ui.updateUI();
+                    player.grow(collected);
+                }
             }
         }
         
-        // Check self-collision (game over condition)
-        if (player.checkSelfCollision()) {
-            endGame();
+        // Update player only if not paused
+        if (!gameState.isPaused) {
+            const playerState = player.update();
+            updateCameraPosition(playerState);
+            
+            // Check self-collision (game over condition)
+            if (player.checkSelfCollision()) {
+                endGame();
+            }
         }
     }
     
@@ -460,8 +459,9 @@ function updateCameraPosition(playerState) {
 function startGame() {
     // Reset game state
     gameState.isPlaying = true;
-    gameState.score = 0;
-    gameState.playerLength = 1;
+    gameState.isPaused = false;
+    gameState.playerLength = 3;
+    gameState.gameHasEnded = false;
     
     // Hide loading/start screen if it exists
     const loadingScreen = document.getElementById('loading-screen');
@@ -472,9 +472,8 @@ function startGame() {
     // Show controls info
     controlsInfo.style.display = 'block';
     
-    // Show score display
-    scoreDisplay.textContent = `Score: ${gameState.score}`;
-    scoreDisplay.style.display = 'block';
+    // Update UI
+    if (ui) ui.updateUI();
     
     // Disable orbit controls during gameplay
     if (orbitControls) {
@@ -497,8 +496,7 @@ function startGame() {
     // Create new resources
     resources = setupResources(scene, planet);
     
-    // Add initial segments
-    player.grow(2); // Start with 3 segments total
+    // No need to grow - player starts with 3 segments already
     
     // Set initial camera position
     const playerState = {
@@ -512,17 +510,33 @@ function startGame() {
 // End the game
 function endGame() {
     gameState.isPlaying = false;
+    gameState.gameHasEnded = true;
     
-    // Re-enable orbit controls for free camera movement
+    // Completely disable orbit controls when game over is shown
     if (orbitControls) {
-        orbitControls.enabled = true;
+        orbitControls.enabled = false;
     }
     
-    // Hide score display
-    scoreDisplay.style.display = 'none';
+    // Set camera to a nice viewing angle of the planet
+    if (player) {
+        const playerPos = player.getHeadPosition();
+        const cameraPos = playerPos.clone().normalize().multiplyScalar(150);
+        camera.position.copy(cameraPos);
+        camera.lookAt(0, 0, 0);
+    }
+    
+    // Update UI to show game over screen
+    if (ui) ui.updateUI();
     controlsInfo.style.display = 'none';
     
-    alert(`Game Over! Score: ${gameState.score}`);
+    // Keep planet visible but remove player and resources
+    if (player) {
+        player.setVisible(false); // Hide player instead of removing
+    }
+    
+    if (resources) {
+        resources.setVisible(false); // Hide resources instead of removing
+    }
 }
 
 // Start animation loop

@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 // Resource configuration
-const RESOURCE_COUNT = 60;           // Significantly increased for better distribution
+const RESOURCE_COUNT = 500;           // Significantly increased for better distribution
 const RESOURCE_SIZE = 2.5;           // Larger resources to match player size
 const RESOURCE_HOVER_HEIGHT = 2.5;   // Height above terrain
 const RESOURCE_COLOR = 0xffdd00;     // Yellow color
@@ -161,6 +161,13 @@ export function setupResources(scene, planet) {
     
     return {
         resources,
+        
+        // Set visibility of all resources
+        setVisible: function(visible) {
+            for (const resource of resources) {
+                resource.mesh.visible = visible;
+            }
+        },
         
         // Update resources (animations, etc.)
         update: function() {

@@ -22,6 +22,7 @@ import { updateCameraPosition } from '../rendering/cameraController.js';
 // Game state object
 const gameState = {
     isPlaying: false,
+    isPaused: false,
     score: 0,
     playerLength: 1,
     debugMode: false,
@@ -92,7 +93,7 @@ function animate() {
     
     const deltaTime = 1/60; // Fixed delta time for consistent physics
     
-    if (gameState.isPlaying) {
+    if (gameState.isPlaying && !gameState.isPaused) {
         // Update player
         player.update(deltaTime);
         
@@ -114,7 +115,7 @@ function animate() {
         }
     }
     
-    // Render scene
+    // Always render scene (even when paused)
     renderer.render(scene, camera);
     
     // Update stats
@@ -140,6 +141,7 @@ function startGame() {
     
     // Reset game state
     gameState.isPlaying = true;
+    gameState.isPaused = false;
     gameState.score = 0;
     gameState.playerLength = 1;
     
@@ -160,5 +162,6 @@ function endGame() {
     console.log('Game over');
     
     gameState.isPlaying = false;
+    gameState.isPaused = false;
     updateUI(gameState);
 } 
