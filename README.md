@@ -1,4 +1,4 @@
-# Luminor
+# Luminor - Planetary Adventure
 
 A web-based 3D game built with Three.js, created entirely through AI collaboration.
 
@@ -11,6 +11,17 @@ Luminor is an innovative web-based game that leverages the power of Three.js to 
 - Three.js for 3D rendering
 - Web technologies (HTML5, CSS3, JavaScript)
 - Vite for development and building
+
+## Project Structure
+
+The project has been organized into a modular architecture:
+
+- `src/core/` - Core game systems (game loop, controls)
+- `src/entities/` - Game entities (player, planet, resources)
+- `src/rendering/` - Rendering systems (camera, lighting, effects)
+- `src/ui/` - User interface components
+- `src/utils/` - Utility functions and constants
+- `src/physics/` - Physics systems (in development)
 
 ## How to Play
 
@@ -26,6 +37,14 @@ This project is currently in active development. Features include:
 - Dynamic lighting system
 - Resource collection mechanics
 - Smooth player controls
+- Enhanced terrain with texturing
+
+## Future Plans
+
+- Physics-based player movement
+- Advanced particle effects
+- Level progression system
+- Sound effects and music
 
 ## License
 

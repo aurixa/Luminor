@@ -7,8 +7,8 @@ import * as THREE from 'three';
 
 // Player configuration
 const PLAYER_SEGMENT_SIZE = 2.0;    // Increased segment size for visibility on much larger planet
-const PLAYER_SPEED = 1;             // Speed for the larger planet
-const PLAYER_TURN_SPEED = 0.009;     // Smoother turning
+const PLAYER_SPEED = 1.3;             // Speed for the larger planet
+const PLAYER_TURN_SPEED = 0.017;     // Smoother turning
 const MIN_SEGMENT_DISTANCE = 2.0;   // Minimum distance between segments
 const MAX_SEGMENT_DISTANCE = 3.0;   // Maximum distance between segments (to prevent gaps)
 const GLOW_INTENSITY = 1.8;         // Increase glow for better visibility

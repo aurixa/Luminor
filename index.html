@@ -15,121 +15,118 @@
             overflow: hidden;
             background-color: #000;
             font-family: Arial, sans-serif;
-            color: #fff;
         }
         
         canvas {
             display: block;
         }
         
-        #debug-info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            font-family: monospace;
-            font-size: 14px;
-            z-index: 100;
-        }
-        
-        #fallback-content {
+        #loading-screen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background-color: #000011;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: #001133;
-            z-index: 50;
+            z-index: 1000;
+            color: #fff;
         }
         
-        #fallback-cube {
-            width: 100px;
-            height: 100px;
-            background-color: #00ff00;
-            animation: rotate 2s infinite linear;
+        #loading-screen h1 {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px #00ffaa, 0 0 20px #00ffaa, 0 0 30px #00ffaa;
         }
         
-        @keyframes rotate {
-            from { transform: rotate3d(1, 1, 1, 0deg); }
-            to { transform: rotate3d(1, 1, 1, 360deg); }
+        #loading-bar-container {
+            width: 50%;
+            height: 30px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        #loading-bar {
+            height: 100%;
+            width: 0;
+            background-color: #00ffaa;
+            border-radius: 15px;
+            transition: width 0.5s;
+        }
+        
+        #start-button {
+            padding: 1rem 2rem;
+            font-size: 1.5rem;
+            background-color: #00ffaa;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+            margin-top: 30px;
+        }
+        
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+            display: none;
+        }
+        
+        .glow {
+            text-shadow: 0 0 10px #00ffaa, 0 0 20px #00ffaa;
         }
     </style>
 </head>
 <body>
-    <div id="debug-info">
-        Loading Luminor game...
-    </div>
-    
-    <div id="fallback-content">
+    <div id="loading-screen">
         <h1>LUMINOR</h1>
-        <p>Loading Three.js scene...</p>
-        <div id="fallback-cube"></div>
+        <div id="loading-bar-container">
+            <div id="loading-bar"></div>
+        </div>
+        <p>Loading game assets...</p>
+        <button id="start-button" style="display: none;">START GAME</button>
     </div>
     
-    <!-- Fallback to CDN versions in case local modules fail -->
-    <script>
-        window.addEventListener('DOMContentLoaded', () => {
-            const debugInfo = document.getElementById('debug-info');
-            debugInfo.innerHTML += '<br>DOM Content Loaded';
-            
-            // Check if THREE is loaded after a timeout
-            setTimeout(() => {
-                if (!window.THREE) {
-                    debugInfo.innerHTML += '<br>THREE.js not found, loading from CDN...';
-                    
-                    const script = document.createElement('script');
-                    script.src = 'https://unpkg.com/three@0.157.0/build/three.min.js';
-                    script.onload = () => {
-                        debugInfo.innerHTML += '<br>THREE.js loaded from CDN';
-                        setupFallbackScene();
-                    };
-                    document.head.appendChild(script);
-                }
-            }, 2000);
-        });
-        
-        // Create a super basic THREE.js scene if the main script fails
-        function setupFallbackScene() {
-            const debugInfo = document.getElementById('debug-info');
-            debugInfo.innerHTML += '<br>Setting up fallback scene';
-            
-            // Remove fallback content
-            document.getElementById('fallback-content').style.display = 'none';
-            
-            // Create scene
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
-            
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
-            
-            // Create a cube
-            const geometry = new THREE.BoxGeometry(2, 2, 2);
-            const material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-            const cube = new THREE.Mesh(geometry, material);
-            scene.add(cube);
-            
-            camera.position.z = 5;
-            
-            function animate() {
-                requestAnimationFrame(animate);
-                cube.rotation.x += 0.01;
-                cube.rotation.y += 0.01;
-                renderer.render(scene, camera);
-            }
-            
-            animate();
-            debugInfo.innerHTML += '<br>Fallback scene running';
-        }
-    </script>
+    <div id="controls-info">
+        <h3>Controls:</h3>
+        <p>← Left Arrow / A: Turn Left</p>
+        <p>→ Right Arrow / D: Turn Right</p>
+    </div>
     
-    <!-- Main game script -->
     <script type="module" src="/src/main.js"></script>
+    <script>
+        // Simulate loading progress
+        window.addEventListener('DOMContentLoaded', () => {
+            const loadingBar = document.getElementById('loading-bar');
+            const loadingScreen = document.getElementById('loading-screen');
+            const controlsInfo = document.getElementById('controls-info');
+            const startButton = document.getElementById('start-button');
+            
+            let progress = 0;
+            const loadingInterval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(loadingInterval);
+                    
+                    // Show start button
+                    document.querySelector('#loading-screen p').textContent = 'Ready to play!';
+                    startButton.style.display = 'block';
+                }
+                loadingBar.style.width = `${progress}%`;
+            }, 200);
+        });
+    </script>
 </body>
 </html> 
