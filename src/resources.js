@@ -4,25 +4,15 @@
  */
 
 import * as THREE from 'three';
-
-// Resource configuration
-const RESOURCE_COUNT = 500;           // Significantly increased for better distribution
-const RESOURCE_SIZE = 3;           // Larger resources to match player size
-const RESOURCE_HOVER_HEIGHT = 2.5;   // Height above terrain
-const RESOURCE_COLOR = 0xffdd00;     // Yellow color
-const GLOW_INTENSITY = 1.5;          // Brighter glow for visibility
-const RESOURCE_ROTATION_SPEED = 0.01; // Speed of rotation animation
-const COLLECTION_DISTANCE = 8.0;      // Distance at which resources can be collected (increased from 5.0)
-const MIN_RESOURCE_SPACING = 50;     // Minimum distance between resources to ensure distribution
+import { RESOURCE_CONFIG } from './utils/constants.js';
 
 /**
  * Setup collectible resources around the planet
  * @param {THREE.Scene} scene - The Three.js scene
  * @param {Object} planet - The planet object
- * @param {Object} gameState - The game state object for score tracking
  * @returns {Object} The resources object with properties and methods
  */
-export function setupResources(scene, planet, gameState) {
+export function setupResources(scene, planet) {
     // Array to hold all resources
     const resources = [];
     
@@ -30,10 +20,10 @@ export function setupResources(scene, planet, gameState) {
     const existingPositions = [];
     
     // Try to create resources with minimum spacing
-    let attemptsRemaining = RESOURCE_COUNT * 3; // Allow multiple attempts per resource
+    let attemptsRemaining = RESOURCE_CONFIG.COUNT * 3; // Allow multiple attempts per resource
     let resourcesCreated = 0;
     
-    while (resourcesCreated < RESOURCE_COUNT && attemptsRemaining > 0) {
+    while (resourcesCreated < RESOURCE_CONFIG.COUNT && attemptsRemaining > 0) {
         attemptsRemaining--;
         
         // Generate a random position on the sphere
@@ -48,229 +38,270 @@ export function setupResources(scene, planet, gameState) {
         const direction = new THREE.Vector3(x, y, z).normalize();
         
         // Get position on actual planet surface with terrain
-        const surfacePos = planet.getNearestPointOnSurface(direction);
+        const surfacePos = planet.getNearestPointOnSurface(direction.multiplyScalar(planet.radius));
         
-        // Check distance to existing resources
+        // Position slightly above the surface
+        const finalPos = surfacePos.clone().normalize().multiplyScalar(
+            surfacePos.length() + RESOURCE_CONFIG.HOVER_HEIGHT
+        );
+        
+        // Check distance from existing resources
         let tooClose = false;
         for (const pos of existingPositions) {
-            if (surfacePos.distanceTo(pos) < MIN_RESOURCE_SPACING) {
+            if (finalPos.distanceTo(pos) < RESOURCE_CONFIG.MIN_SPACING) {
                 tooClose = true;
                 break;
             }
         }
         
-        if (!tooClose) {
-            // Position slightly above terrain
-            const finalPosition = surfacePos.clone().normalize().multiplyScalar(
-                surfacePos.length() + RESOURCE_HOVER_HEIGHT
-            );
-            
-            // Create the resource mesh
-            const geometry = createResourceGeometry();
-            const material = createGlowingMaterial(RESOURCE_COLOR, GLOW_INTENSITY);
-            const mesh = new THREE.Mesh(geometry, material);
-            
-            // Position the resource
-            mesh.position.copy(finalPosition);
-            
-            // Orient the resource to face away from the planet center
-            const normal = finalPosition.clone().normalize();
-            const up = new THREE.Vector3(0, 1, 0);
-            const axis = new THREE.Vector3().crossVectors(up, normal).normalize();
-            const angle = Math.acos(up.dot(normal));
-            mesh.quaternion.setFromAxisAngle(axis, angle);
-            
-            // Add a random initial rotation around the normal
-            const randomRotation = new THREE.Quaternion().setFromAxisAngle(
-                normal, 
-                Math.random() * Math.PI * 2
-            );
-            mesh.quaternion.multiply(randomRotation);
-            
-            // Add to scene
-            scene.add(mesh);
-            
-            // Add to resources array with tracking data
-            resources.push({
-                mesh: mesh,
-                position: finalPosition.clone(),
-                collected: false,
-                rotationAxis: normal,
-                rotationSpeed: RESOURCE_ROTATION_SPEED * (0.8 + Math.random() * 0.4), // Slightly randomize speed
-                hoverPhase: Math.random() * Math.PI * 2, // Random starting phase for hover animation
-                hoverSpeed: 0.5 + Math.random() * 0.5,   // Random hover speed
-                hoverHeight: 0.3 + Math.random() * 0.2   // Random hover height
-            });
-            
-            // Store position to check spacing
-            existingPositions.push(finalPosition.clone());
-            
-            resourcesCreated++;
-        }
+        if (tooClose) continue; // Skip this position and try again
+        
+        // Create resource geometry (more complex than a simple sphere)
+        const resourceGeometry = createResourceGeometry();
+        const resourceMaterial = createGlowingMaterial(RESOURCE_CONFIG.COLOR, RESOURCE_CONFIG.GLOW_INTENSITY);
+        const resourceMesh = new THREE.Mesh(resourceGeometry, resourceMaterial);
+        
+        // Set position
+        resourceMesh.position.copy(finalPos);
+        
+        // Orient to face away from planet center
+        resourceMesh.lookAt(new THREE.Vector3(0, 0, 0));
+        resourceMesh.rotateX(Math.PI/2); // Adjust orientation
+        
+        // Add to scene
+        scene.add(resourceMesh);
+        
+        // Add to resources array
+        resources.push({
+            mesh: resourceMesh,
+            position: finalPos,
+            collected: false,
+            // Add rotation animation parameters
+            rotationAxis: new THREE.Vector3(0, 1, 0).normalize(),
+            rotationSpeed: RESOURCE_CONFIG.ROTATION_SPEED * (0.8 + Math.random() * 0.4),
+            bobHeight: 0.2 + Math.random() * 0.3,
+            bobSpeed: 0.005 + Math.random() * 0.003,
+            bobPhase: Math.random() * Math.PI * 2,
+            originalY: finalPos.y
+        });
+        
+        // Remember this position to avoid clustering
+        existingPositions.push(finalPos.clone());
+        resourcesCreated++;
     }
     
-    console.log(`Created ${resourcesCreated} resources out of requested ${RESOURCE_COUNT}`);
+    // If we couldn't create all resources with spacing, fill the rest with less spacing
+    while (resourcesCreated < RESOURCE_CONFIG.COUNT) {
+        // Generate a random position on the sphere
+        const phi = Math.random() * Math.PI * 2;
+        const theta = Math.acos(Math.random() * 2 - 1);
+        
+        const x = Math.sin(theta) * Math.cos(phi);
+        const y = Math.sin(theta) * Math.sin(phi);
+        const z = Math.cos(theta);
+        
+        // Create direction vector and scale to planet radius
+        const direction = new THREE.Vector3(x, y, z).normalize();
+        
+        // Get position on actual planet surface with terrain
+        const surfacePos = planet.getNearestPointOnSurface(direction.multiplyScalar(planet.radius));
+        
+        // Position slightly above the surface
+        const finalPos = surfacePos.clone().normalize().multiplyScalar(
+            surfacePos.length() + RESOURCE_CONFIG.HOVER_HEIGHT
+        );
+        
+        // Create resource geometry (more complex than a simple sphere)
+        const resourceGeometry = createResourceGeometry();
+        const resourceMaterial = createGlowingMaterial(RESOURCE_CONFIG.COLOR, RESOURCE_CONFIG.GLOW_INTENSITY);
+        const resourceMesh = new THREE.Mesh(resourceGeometry, resourceMaterial);
+        
+        // Set position
+        resourceMesh.position.copy(finalPos);
+        
+        // Orient to face away from planet center
+        resourceMesh.lookAt(new THREE.Vector3(0, 0, 0));
+        resourceMesh.rotateX(Math.PI/2); // Adjust orientation
+        
+        // Add to scene
+        scene.add(resourceMesh);
+        
+        // Add to resources array
+        resources.push({
+            mesh: resourceMesh,
+            position: finalPos,
+            collected: false,
+            // Add rotation animation parameters
+            rotationAxis: new THREE.Vector3(0, 1, 0).normalize(),
+            rotationSpeed: RESOURCE_CONFIG.ROTATION_SPEED * (0.8 + Math.random() * 0.4),
+            bobHeight: 0.2 + Math.random() * 0.3,
+            bobSpeed: 0.005 + Math.random() * 0.003,
+            bobPhase: Math.random() * Math.PI * 2,
+            originalY: finalPos.y
+        });
+        
+        resourcesCreated++;
+    }
     
-    // Return the resources object with methods
+    console.log(`Created ${resources.length} resources on the planet`);
+    
+    // Add respawn functionality for collected resources
+    let respawnTimer = 0;
+    const MAX_ACTIVE_RESOURCES = Math.min(80, RESOURCE_CONFIG.COUNT * RESOURCE_CONFIG.MAX_ACTIVE_RATIO);
+    
     return {
         resources,
-        
-        // Update method to animate resources
-        update: function(playerPosition) {
-            for (const resource of resources) {
-                if (resource.collected) continue;
-                
-                // Rotate the resource
-                const rotationQuat = new THREE.Quaternion().setFromAxisAngle(
-                    resource.rotationAxis, 
-                    resource.rotationSpeed
-                );
-                resource.mesh.quaternion.multiply(rotationQuat);
-                
-                // Apply hover animation
-                resource.hoverPhase += 0.05 * resource.hoverSpeed;
-                const hoverOffset = Math.sin(resource.hoverPhase) * resource.hoverHeight;
-                const hoverPosition = resource.position.clone().add(
-                    resource.rotationAxis.clone().multiplyScalar(hoverOffset)
-                );
-                resource.mesh.position.copy(hoverPosition);
-                
-                // Check for collection if player position provided
-                if (playerPosition && !resource.collected) {
-                    const distToPlayer = playerPosition.distanceTo(resource.mesh.position);
-                    if (distToPlayer < COLLECTION_DISTANCE) {
-                        this.collectResource(resource);
-                        
-                        // Increment player length/score
-                        gameState.playerLength++;
-                    }
-                }
-            }
-        },
-        
-        // Collect a resource
-        collectResource: function(resource) {
-            // Mark as collected
-            resource.collected = true;
-            
-            // Create collection animation
-            const duration = 0.5; // Animation duration in seconds
-            const startScale = resource.mesh.scale.x;
-            const startOpacity = 1.0;
-            
-            // Animation variables
-            let elapsed = 0;
-            let interval = setInterval(() => {
-                elapsed += 1/60; // Assume 60fps
-                const progress = Math.min(1.0, elapsed / duration);
-                
-                // Scale up and fade out
-                const scale = startScale * (1 + progress * 2);
-                const opacity = startOpacity * (1 - progress);
-                
-                resource.mesh.scale.set(scale, scale, scale);
-                resource.mesh.material.opacity = opacity;
-                
-                // Animation complete
-                if (progress >= 1.0) {
-                    clearInterval(interval);
-                    scene.remove(resource.mesh);
-                    resource.mesh.geometry.dispose();
-                    resource.mesh.material.dispose();
-                }
-            }, 16); // ~60fps
-            
-            // Return collection event
-            return {
-                position: resource.position.clone(),
-                value: 1 // Each resource is worth 1 point
-            };
-        },
-        
-        // Check for collisions with the player segments
-        checkCollisions: function(playerPosition) {
-            if (!playerPosition) return 0;
-            
-            let collected = 0;
-            
-            for (const resource of resources) {
-                if (!resource.collected) {
-                    const distToPlayer = playerPosition.distanceTo(resource.mesh.position);
-                    if (distToPlayer < COLLECTION_DISTANCE) {
-                        this.collectResource(resource);
-                        collected++;
-                    }
-                }
-            }
-            
-            return collected;
-        },
         
         // Set visibility of all resources
         setVisible: function(visible) {
             for (const resource of resources) {
+                resource.mesh.visible = visible;
+            }
+        },
+        
+        // Update resources (animations, etc.)
+        update: function() {
+            // Update respawn timer
+            respawnTimer += 16.67; // Approximately 60fps
+            
+            // Check for resource respawn
+            if (respawnTimer >= RESOURCE_CONFIG.RESPAWN_INTERVAL) {
+                respawnTimer = 0;
+                
+                // Count active (non-collected) resources
+                const activeCount = resources.filter(r => !r.collected).length;
+                
+                // If we're below the active resource limit, respawn some
+                if (activeCount < MAX_ACTIVE_RESOURCES) {
+                    // Find collected resources that can be respawned
+                    const collectedResources = resources.filter(r => r.collected);
+                    
+                    // Respawn up to 5 resources at a time
+                    const toRespawn = Math.min(5, collectedResources.length, MAX_ACTIVE_RESOURCES - activeCount);
+                    
+                    for (let i = 0; i < toRespawn; i++) {
+                        // Get a random collected resource
+                        const resourceIndex = Math.floor(Math.random() * collectedResources.length);
+                        const resource = collectedResources[resourceIndex];
+                        
+                        // Respawn it at a new position
+                        const phi = Math.random() * Math.PI * 2;
+                        const theta = Math.acos(Math.random() * 2 - 1);
+                        
+                        const x = Math.sin(theta) * Math.cos(phi);
+                        const y = Math.sin(theta) * Math.sin(phi);
+                        const z = Math.cos(theta);
+                        
+                        // Create new position on planet surface
+                        const direction = new THREE.Vector3(x, y, z).normalize();
+                        const surfacePos = planet.getNearestPointOnSurface(direction.multiplyScalar(planet.radius));
+                        const finalPos = surfacePos.clone().normalize().multiplyScalar(
+                            surfacePos.length() + RESOURCE_CONFIG.HOVER_HEIGHT
+                        );
+                        
+                        // Update resource
+                        resource.position.copy(finalPos);
+                        resource.mesh.position.copy(finalPos);
+                        resource.mesh.visible = true;
+                        resource.collected = false;
+                        resource.bobPhase = Math.random() * Math.PI * 2;
+                        
+                        // Remove from collected array
+                        collectedResources.splice(resourceIndex, 1);
+                    }
+                }
+            }
+            
+            // Update resource animations
+            for (const resource of resources) {
                 if (!resource.collected) {
-                    resource.mesh.visible = visible;
+                    // Apply rotation animation around local up axis
+                    resource.mesh.rotateOnAxis(resource.rotationAxis, resource.rotationSpeed);
+                    
+                    // Apply bobbing animation
+                    resource.bobPhase += resource.bobSpeed;
+                    const bobOffset = Math.sin(resource.bobPhase) * resource.bobHeight;
+                    const upVector = resource.position.clone().normalize();
+                    
+                    // Add bobbing movement
+                    const newPosition = resource.position.clone().add(
+                        upVector.multiplyScalar(bobOffset)
+                    );
+                    resource.mesh.position.copy(newPosition);
                 }
             }
         },
         
-        // Clean up resources
+        // Check for collisions with player
+        checkCollisions: function(player) {
+            let collectedCount = 0;
+            const playerPosition = player.getHeadPosition();
+            
+            for (const resource of resources) {
+                if (!resource.collected && 
+                    resource.position.distanceTo(playerPosition) < RESOURCE_CONFIG.COLLECTION_DISTANCE) {
+                    
+                    // Mark as collected
+                    resource.collected = true;
+                    
+                    // Hide the mesh
+                    resource.mesh.visible = false;
+                    
+                    // Count collection
+                    collectedCount++;
+                }
+            }
+            
+            return collectedCount;
+        },
+        
+        // Remove resources from scene
         remove: function() {
             for (const resource of resources) {
                 scene.remove(resource.mesh);
-                if (resource.mesh.geometry) resource.mesh.geometry.dispose();
-                if (resource.mesh.material) resource.mesh.material.dispose();
+                resource.mesh.geometry.dispose();
+                resource.mesh.material.dispose();
             }
             resources.length = 0;
-        },
-        
-        // Reset resources
-        reset: function() {
-            this.remove();
-            // Re-initialize would happen here, but we'll just
-            // let the caller create a new instance
         }
     };
 }
 
 /**
- * Create the geometry for a resource (a crystal-like shape)
- * @returns {THREE.BufferGeometry} The resource geometry
+ * Create geometry for resources
+ * @returns {THREE.BufferGeometry} The created geometry
  */
 function createResourceGeometry() {
-    // Create a crystal-like shape using a modified octahedron
-    const baseGeometry = new THREE.OctahedronGeometry(RESOURCE_SIZE, 0);
+    // Complex shape - combination of shapes
+    const baseGeometry = new THREE.OctahedronGeometry(RESOURCE_CONFIG.SIZE, 1);
     
-    // Get vertices and modify them slightly for a more interesting shape
+    // Add some noise to the vertices for a more crystalline look
     const positions = baseGeometry.attributes.position.array;
-    
     for (let i = 0; i < positions.length; i += 3) {
-        // Add some random variation to each vertex
-        positions[i] *= 0.8 + Math.random() * 0.4;
-        positions[i + 1] *= 0.8 + Math.random() * 0.4;
-        positions[i + 2] *= 0.8 + Math.random() * 0.4;
+        const noise = (Math.random() - 0.5) * 0.3;
+        positions[i] += noise;
+        positions[i + 1] += noise;
+        positions[i + 2] += noise;
     }
     
-    // Update normals for proper lighting
+    // Update the geometry
     baseGeometry.computeVertexNormals();
     
     return baseGeometry;
 }
 
 /**
- * Create a glowing material
- * @param {number} color - The color for the material
+ * Create glowing material for resources
+ * @param {number} color - The color of the resource
  * @param {number} intensity - The glow intensity
- * @returns {THREE.Material} The glowing material
+ * @returns {THREE.Material} The created material
  */
 function createGlowingMaterial(color, intensity) {
-    return new THREE.MeshStandardMaterial({
+    return new THREE.MeshPhongMaterial({
         color: color,
         emissive: color,
         emissiveIntensity: intensity,
-        metalness: 0.8,
-        roughness: 0.2,
+        shininess: 100,
         transparent: true,
         opacity: 0.9
     });

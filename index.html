@@ -80,6 +80,7 @@
             border-radius: 5px;
             font-size: 14px;
             z-index: 10;
+            display: none;
         }
         
         .glow {
@@ -97,7 +98,7 @@
         <button id="start-button" style="display: none;">START GAME</button>
     </div>
     
-    <div id="controls-info" style="display: none;">
+    <div id="controls-info">
         <h3>Controls:</h3>
         <p>← Left Arrow / A: Turn Left</p>
         <p>→ Right Arrow / D: Turn Right</p>
@@ -112,33 +113,6 @@
             const controlsInfo = document.getElementById('controls-info');
             const startButton = document.getElementById('start-button');
             
-            // Add click handler to the start button
-            startButton.addEventListener('click', () => {
-                console.log("Loader start button clicked");
-                
-                // Remove loading screen immediately
-                if (loadingScreen && loadingScreen.parentNode) {
-                    loadingScreen.parentNode.removeChild(loadingScreen);
-                }
-                
-                // Show controls
-                if (controlsInfo) {
-                    controlsInfo.style.display = 'block';
-                }
-                
-                // Use a small timeout to ensure main.js has initialized properly
-                setTimeout(() => {
-                    // Try different ways to access the game start function
-                    if (typeof window.startGameFromLoader === 'function') {
-                        window.startGameFromLoader();
-                    } else if (typeof window.startGame === 'function') {
-                        window.startGame();
-                    } else {
-                        console.error("Unable to start game - function not available");
-                    }
-                }, 100);
-            });
-            
             let progress = 0;
             const loadingInterval = setInterval(() => {
                 progress += Math.random() * 10;
@@ -149,9 +123,6 @@
                     // Show start button
                     document.querySelector('#loading-screen p').textContent = 'Ready to play!';
                     startButton.style.display = 'block';
-                    
-                    // Show controls info
-                    controlsInfo.style.display = 'block';
                 }
                 loadingBar.style.width = `${progress}%`;
             }, 200);

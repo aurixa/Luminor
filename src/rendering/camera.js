@@ -5,17 +5,7 @@
  */
 
 import * as THREE from 'three';
-
-// Camera configuration constants
-export const CAMERA_CONFIG = {
-    DISTANCE: 40,         // Distance from the player
-    HEIGHT: 60,           // Height above the ground
-    SMOOTHNESS: 0.08,     // Camera movement smoothing factor
-    FORWARD_OFFSET: 20,   // How far ahead of the player to look
-    FOV: 75,              // Field of view
-    NEAR: 0.1,            // Near clipping plane
-    FAR: 1000             // Far clipping plane
-};
+import { CAMERA_CONFIG } from '../utils/constants.js';
 
 /**
  * Setup the game camera

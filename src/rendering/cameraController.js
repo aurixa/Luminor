@@ -1,68 +1,41 @@
 /**
  * Luminor
- * Camera controller for dynamic camera positioning
+ * Camera controller for following the player
  * Code written by a mixture of AI (2025)
  */
 
 import * as THREE from 'three';
-import { CAMERA_CONFIG } from './camera.js';
-
-// Reusable vector for calculations
-const tempVector = new THREE.Vector3();
-const upVector = new THREE.Vector3();
-const targetPosition = new THREE.Vector3();
-const cameraOffset = new THREE.Vector3();
+import { CAMERA_CONFIG } from '../utils/constants.js';
 
 /**
- * Update the camera position to follow the player
- * @param {Object} playerState - The current player state
- * @param {THREE.Camera} camera - The game camera
- * @param {Object} planet - The planet object
+ * Update camera position to follow the player
+ * @param {Object} playerState - Current player state
+ * @param {THREE.Camera} camera - The camera to update
+ * @param {Object} planet - The planet object for terrain checks
  */
 export function updateCameraPosition(playerState, camera, planet) {
-    const { position, direction, up } = playerState;
+    if (!playerState) return;
     
-    // Calculate the target position for the camera
-    // Start from the player's position
-    targetPosition.copy(position);
+    const playerPos = playerState.position;
+    const playerDir = playerState.direction;
+    const up = playerPos.clone().normalize();
     
-    // Calculate the camera offset based on player direction and up vector
+    // Calculate camera offset
+    const cameraOffset = new THREE.Vector3();
     cameraOffset.set(0, CAMERA_CONFIG.HEIGHT, CAMERA_CONFIG.DISTANCE);
     
-    // Rotate the offset to align with player orientation
-    tempVector.copy(direction).negate().normalize();
-    upVector.copy(up).normalize();
+    // Calculate target position
+    const targetPosition = playerPos.clone()
+        .add(up.clone().multiplyScalar(CAMERA_CONFIG.HEIGHT))
+        .sub(playerDir.clone().multiplyScalar(CAMERA_CONFIG.DISTANCE));
     
-    // Transform the camera offset using the player's orientation vectors
-    const right = new THREE.Vector3().crossVectors(upVector, tempVector).normalize();
-    
-    // Apply the offset in the player's coordinate system
-    targetPosition.add(
-        tempVector.clone().multiplyScalar(cameraOffset.z)
-    ).add(
-        upVector.clone().multiplyScalar(cameraOffset.y)
-    ).add(
-        right.clone().multiplyScalar(cameraOffset.x)
+    // Look at point ahead of player
+    const lookTarget = playerPos.clone().add(
+        playerDir.clone().multiplyScalar(CAMERA_CONFIG.FORWARD_OFFSET)
     );
     
-    // Look ahead of the player based on forward offset
-    const lookTarget = position.clone().add(
-        direction.clone().multiplyScalar(CAMERA_CONFIG.FORWARD_OFFSET)
-    );
-    
-    // Smooth camera movement
+    // Update camera
     camera.position.lerp(targetPosition, CAMERA_CONFIG.SMOOTHNESS);
-    
-    // Make the camera look at the player plus some forward offset
     camera.lookAt(lookTarget);
-    
-    // Optional: Adjust camera for terrain height
-    // If the player is on a high point, adjust camera height accordingly
-    if (planet && planet.getElevationAtPoint) {
-        const elevation = planet.getElevationAtPoint(position);
-        if (elevation > 10) {
-            // Adjust camera height based on terrain elevation
-            camera.position.y += elevation * 0.3;
-        }
-    }
+    camera.up.copy(up);
 } 

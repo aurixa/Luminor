@@ -1,20 +1,22 @@
 /**
  * Luminor
+ * Player setup and control
  * Code written by a mixture of AI (2025)
  */
 
 import * as THREE from 'three';
+import { PLAYER_CONFIG } from './utils/constants.js';
 
 // Player configuration
-const PLAYER_SEGMENT_SIZE = 2.0;    // Increased segment size for visibility on much larger planet
-const PLAYER_SPEED = 1.3;             // Speed for the larger planet
-const PLAYER_TURN_SPEED = 0.017;     // Smoother turning
-const MIN_SEGMENT_DISTANCE = 2.0;   // Minimum distance between segments
-const MAX_SEGMENT_DISTANCE = 3.0;   // Maximum distance between segments (to prevent gaps)
-const GLOW_INTENSITY = 1.8;         // Increase glow for better visibility
-const HOVER_HEIGHT = 7.0;           // INCREASED to handle more dramatic terrain features
-const HOVER_SMOOTHNESS = 0.08;      // DECREASED for smoother transitions over extreme terrain
-const HOVER_WOBBLE = 0.6;           // INCREASED for more visible hovering movement
+// const PLAYER_SEGMENT_SIZE = 2.0;    // Increased segment size for visibility on much larger planet
+// const PLAYER_SPEED = 1.3;             // Speed for the larger planet
+// const PLAYER_TURN_SPEED = 0.017;     // Smoother turning
+// const MIN_SEGMENT_DISTANCE = 2.0;   // Minimum distance between segments
+// const MAX_SEGMENT_DISTANCE = 3.0;   // Maximum distance between segments (to prevent gaps)
+// const GLOW_INTENSITY = 1.8;         // Increase glow for better visibility
+// const HOVER_HEIGHT = 7.0;           // INCREASED to handle more dramatic terrain features
+// const HOVER_SMOOTHNESS = 0.08;      // DECREASED for smoother transitions over extreme terrain
+// const HOVER_WOBBLE = 0.6;           // INCREASED for more visible hovering movement
 
 // Debug visualization settings
 const DEBUG_ALIGNMENT = true;        // Enable debug alignment indicators
@@ -33,12 +35,12 @@ export function setupPlayer(scene, planet, camera) {
     const segmentMeshes = [];
     
     // Create the head of the player
-    const headGeometry = new THREE.SphereGeometry(PLAYER_SEGMENT_SIZE, 16, 16);
-    const headMaterial = createGlowingMaterial(0x00ffaa, GLOW_INTENSITY);
+    const headGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
+    const headMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY);
     const headMesh = new THREE.Mesh(headGeometry, headMaterial);
     
     // Set initial position on the light side of the planet
-    const initialPosition = new THREE.Vector3(planet.radius + HOVER_HEIGHT, 0, 0);
+    const initialPosition = new THREE.Vector3(planet.radius + PLAYER_CONFIG.HOVER_HEIGHT, 0, 0);
     headMesh.position.copy(initialPosition);
     scene.add(headMesh);
     
@@ -62,7 +64,7 @@ export function setupPlayer(scene, planet, camera) {
         const normalMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
         const normalGeometry = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(0, ALIGNMENT_LINE_LENGTH, 0)
+            new THREE.Vector3(0, PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH, 0)
         ]);
         surfaceNormalLine = new THREE.Line(normalGeometry, normalMaterial);
         scene.add(surfaceNormalLine);
@@ -71,7 +73,7 @@ export function setupPlayer(scene, planet, camera) {
         const directionMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
         const directionGeometry = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(0, 0, ALIGNMENT_LINE_LENGTH)
+            new THREE.Vector3(0, 0, PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
         ]);
         directionLine = new THREE.Line(directionGeometry, directionMaterial);
         scene.add(directionLine);
@@ -80,7 +82,7 @@ export function setupPlayer(scene, planet, camera) {
         const rightMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
         const rightGeometry = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(ALIGNMENT_LINE_LENGTH, 0, 0)
+            new THREE.Vector3(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH, 0, 0)
         ]);
         rightLine = new THREE.Line(rightGeometry, rightMaterial);
         scene.add(rightLine);
@@ -141,7 +143,7 @@ export function setupPlayer(scene, planet, camera) {
                 if (segments.length > 0 && Math.random() > 0.7) {
                     const lastSegment = segments[segments.length - 1];
                     
-                    const discGeometry = new THREE.CircleGeometry(PLAYER_SEGMENT_SIZE * 0.8, 8);
+                    const discGeometry = new THREE.CircleGeometry(PLAYER_CONFIG.SEGMENT_SIZE * 0.8, 8);
                     const discMesh = new THREE.Mesh(discGeometry, trailMaterial.clone());
                     
                     // Position and orient disc
@@ -206,8 +208,8 @@ export function setupPlayer(scene, planet, camera) {
         const surfaceNormal = basePosition.clone().normalize();
         
         // Calculate hover position with minimal wobble
-        const hoverWobble = Math.sin(segment.hoverPhase) * HOVER_WOBBLE;
-        const hoverDist = HOVER_HEIGHT + hoverWobble;
+        const hoverWobble = Math.sin(segment.hoverPhase) * PLAYER_CONFIG.HOVER_WOBBLE;
+        const hoverDist = PLAYER_CONFIG.HOVER_HEIGHT + hoverWobble;
         
         // Apply hover distance along normal
         const hoverPosition = basePosition.clone().add(
@@ -244,13 +246,13 @@ export function setupPlayer(scene, planet, camera) {
             // Apply steering based on keyboard input
             if (keys.left) {
                 // Rotate currentDirection around the up vector
-                currentDirection.applyAxisAngle(up, PLAYER_TURN_SPEED);
+                currentDirection.applyAxisAngle(up, PLAYER_CONFIG.TURN_SPEED);
                 currentDirection.normalize();
             }
             
             if (keys.right) {
                 // Rotate currentDirection around the up vector
-                currentDirection.applyAxisAngle(up, -PLAYER_TURN_SPEED);
+                currentDirection.applyAxisAngle(up, -PLAYER_CONFIG.TURN_SPEED);
                 currentDirection.normalize();
             }
             
@@ -262,14 +264,14 @@ export function setupPlayer(scene, planet, camera) {
             
             // Move head in the current direction
             const newPosition = head.position.clone().add(
-                currentDirection.clone().multiplyScalar(PLAYER_SPEED)
+                currentDirection.clone().multiplyScalar(PLAYER_CONFIG.SPEED)
             );
             
             // Project to planet surface and add hover height
             const surfacePoint = planet.getNearestPointOnSurface(newPosition);
             const surfaceNormal = surfacePoint.clone().normalize();
             const hoverPosition = surfacePoint.clone().add(
-                surfaceNormal.multiplyScalar(HOVER_HEIGHT)
+                surfaceNormal.multiplyScalar(PLAYER_CONFIG.HOVER_HEIGHT)
             );
             
             // Update head position
@@ -287,19 +289,19 @@ export function setupPlayer(scene, planet, camera) {
                 // Reset geometries
                 const normalPoints = [
                     new THREE.Vector3(0, 0, 0),
-                    surfaceNormal.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                    surfaceNormal.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
                 ];
                 surfaceNormalLine.geometry.setFromPoints(normalPoints);
                 
                 const dirPoints = [
                     new THREE.Vector3(0, 0, 0),
-                    currentDirection.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                    currentDirection.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
                 ];
                 directionLine.geometry.setFromPoints(dirPoints);
                 
                 const rightPoints = [
                     new THREE.Vector3(0, 0, 0),
-                    right.clone().multiplyScalar(ALIGNMENT_LINE_LENGTH)
+                    right.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
                 ];
                 rightLine.geometry.setFromPoints(rightPoints);
             }
@@ -314,7 +316,7 @@ export function setupPlayer(scene, planet, camera) {
                 
                 // Target position (at fixed distance from previous segment)
                 const targetPosition = prevSegment.position.clone().sub(
-                    direction.multiplyScalar(MIN_SEGMENT_DISTANCE * 1.2)
+                    direction.multiplyScalar(PLAYER_CONFIG.MIN_SEGMENT_DISTANCE * 1.2)
                 );
                 
                 // Update position
@@ -360,8 +362,8 @@ export function setupPlayer(scene, planet, camera) {
                 const newPosition = lastSegment.position.clone();
                 
                 // Create a new segment slightly behind the last one
-                const segmentGeometry = new THREE.SphereGeometry(PLAYER_SEGMENT_SIZE, 16, 16);
-                const segmentMaterial = createGlowingMaterial(0x00ffaa, GLOW_INTENSITY * 0.8);
+                const segmentGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
+                const segmentMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY * 0.8);
                 const segmentMesh = new THREE.Mesh(segmentGeometry, segmentMaterial);
                 segmentMesh.position.copy(newPosition);
                 scene.add(segmentMesh);

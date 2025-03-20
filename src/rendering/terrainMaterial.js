@@ -1,10 +1,11 @@
 /**
  * Luminor
- * Terrain material generator
+ * Terrain material configuration and setup
  * Code written by a mixture of AI (2025)
  */
 
 import * as THREE from 'three';
+import { TERRAIN_MATERIAL_CONFIG } from '../utils/constants.js';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
 
 // Material configuration
@@ -29,6 +30,9 @@ export function createTerrainMaterial() {
     
     // Create physical material with textures
     const material = new THREE.MeshStandardMaterial({
+        baseColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.BASE_COLOR),
+        highElevationColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.HIGH_ELEVATION_COLOR),
+        lowElevationColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.LOW_ELEVATION_COLOR),
         map: diffuseMap,
         normalMap: normalMap,
         normalScale: new THREE.Vector2(MATERIAL_CONFIG.normalMapStrength, MATERIAL_CONFIG.normalMapStrength),
