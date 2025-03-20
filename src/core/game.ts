@@ -35,7 +35,7 @@ let controls: Controls | null = null;
 let planet: Planet | null = null;
 let player: Player | null = null;
 let resources: ResourceManager | null = null;
-let gameLoop: GameLoop | null = null;
+const gameLoop: GameLoop | null = null;
 let ui: GameUI | null = null;
 
 const gameCallbacks: GameCallbacks = {
@@ -66,20 +66,21 @@ const gameCallbacks: GameCallbacks = {
 const gameState: GameState = {
   scene: null,
   camera: null,
-  player: null,
-  planet: null,
+  renderer: null,
+  stats: null,
   controls: null,
+  planet: null,
+  player: null,
+  resources: null,
   gameLoop: null,
   gameUI: null,
-  stats: null,
   callbacks: gameCallbacks,
   isPlaying: false,
   isPaused: false,
   playerLength: 1,
   gameHasEnded: false,
   score: 0,
-  resourceCount: 0,
-  resources: null
+  resourceCount: 0
 };
 
 // Set callbacks after initialization

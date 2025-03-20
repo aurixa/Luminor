@@ -191,7 +191,7 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
     },
 
     // Update resources (animations, etc.)
-    update: function (player: Player, deltaTime: number): void {
+    update: function (_player: Player, deltaTime: number): void {
       // Update respawn timer
       respawnTimer += deltaTime;
 
@@ -200,12 +200,12 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
         respawnTimer = 0;
 
         // Count active (non-collected) resources
-        const activeCount = resources.filter((r) => !r.collected).length;
+        const activeCount = resources.filter(r => !r.collected).length;
 
         // If we're below the active resource limit, respawn some
         if (activeCount < MAX_ACTIVE_RESOURCES) {
           // Find collected resources that can be respawned
-          const collectedResources = resources.filter((r) => r.collected);
+          const collectedResources = resources.filter(r => r.collected);
 
           // Respawn up to 5 resources at a time
           const toRespawn = Math.min(
@@ -292,7 +292,7 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
         scene.remove(resource.mesh);
         resource.mesh.geometry.dispose();
         if (Array.isArray(resource.mesh.material)) {
-          resource.mesh.material.forEach((m) => m.dispose());
+          resource.mesh.material.forEach(m => m.dispose());
         } else {
           resource.mesh.material.dispose();
         }

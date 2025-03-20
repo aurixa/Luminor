@@ -16,26 +16,6 @@ import { setupResources } from './core/resources';
 import { setupUI } from './ui/interface';
 import { CAMERA_CONFIG } from './utils/constants';
 
-// Initialize game state
-let gameState: GameState = {
-  scene: null,
-  camera: null,
-  player: null,
-  planet: null,
-  controls: null,
-  gameLoop: null,
-  gameUI: null,
-  stats: null,
-  callbacks: {} as GameCallbacks,
-  isPlaying: false,
-  isPaused: false,
-  playerLength: 3,
-  gameHasEnded: false,
-  score: 0,
-  resourceCount: 0,
-  resources: null
-};
-
 // Game callbacks
 const gameCallbacks: GameCallbacks = {
   onSpacePressed: () => {
@@ -103,6 +83,27 @@ const gameCallbacks: GameCallbacks = {
       gameState.camera.lookAt(targetPosition);
     }
   }
+};
+
+// Initialize game state
+const gameState: GameState = {
+  scene: null,
+  camera: null,
+  renderer: null,
+  stats: null,
+  controls: null,
+  planet: null,
+  player: null,
+  resources: null,
+  gameLoop: null,
+  gameUI: null,
+  callbacks: gameCallbacks,
+  isPlaying: false,
+  isPaused: false,
+  playerLength: 3,
+  gameHasEnded: false,
+  score: 0,
+  resourceCount: 0
 };
 
 // Set callbacks after initialization

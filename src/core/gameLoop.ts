@@ -80,7 +80,7 @@ function startGameLoop(
   callbacks: GameCallbacks
 ): void {
   lastTime = performance.now();
-  animationFrame = requestAnimationFrame((time) =>
+  animationFrame = requestAnimationFrame(time =>
     animate(time, gameState, scene, camera, renderer, player, planet, resources, stats, callbacks)
   );
 }
@@ -174,7 +174,7 @@ function animate(
 
   // Continue animation loop if not stopped
   if (animationFrame !== null) {
-    animationFrame = requestAnimationFrame((nextTime) =>
+    animationFrame = requestAnimationFrame(nextTime =>
       animate(
         nextTime,
         gameState,

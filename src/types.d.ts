@@ -31,12 +31,14 @@ declare module 'three/examples/jsm/math/SimplexNoise.js' {
 export interface GameState {
   scene: THREE.Scene | null;
   camera: THREE.PerspectiveCamera | null;
-  player: Player | null;
-  planet: Planet | null;
+  renderer: THREE.WebGLRenderer | null;
+  stats: Stats | null;
   controls: Controls | null;
+  planet: Planet | null;
+  player: Player | null;
+  resources: ResourceManager | null;
   gameLoop: GameLoop | null;
   gameUI: GameUI | null;
-  stats: Stats | null;
   callbacks: GameCallbacks;
   isPlaying: boolean;
   isPaused: boolean;
@@ -44,7 +46,6 @@ export interface GameState {
   gameHasEnded: boolean;
   score: number;
   resourceCount: number;
-  resources: ResourceManager | null;
 }
 
 // Input keys interface
@@ -105,6 +106,7 @@ export interface Player {
   grow: (count: number) => void;
   getSegmentCount: () => number;
   getHeadPosition: () => THREE.Vector3;
+  die: () => void;
   update: (deltaTime: number) => void;
 }
 

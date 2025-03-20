@@ -82,6 +82,9 @@ export function setupPlayer(
     grow: (count: number) => segmentsSystem.growTail(count),
     getSegmentCount: () => segmentsSystem.getCount(),
     getHeadPosition: () => headMesh.position.clone(),
+    die: () => {
+      isAlive = false;
+    },
     update: (deltaTime: number) => {
       if (!isAlive) return;
 

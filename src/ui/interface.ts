@@ -235,23 +235,21 @@ function setupUIStyles(uiElements: UIElements): void {
   }
 
   // Style buttons
-  [uiElements.pauseButton, uiElements.restartButton, uiElements.mainMenuButton].forEach(
-    (button) => {
-      if (button) {
-        setElementStyles(button, {
-          padding: '10px 20px',
-          margin: '10px',
-          backgroundColor: '#00ffaa',
-          color: 'black',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          fontSize: '16px'
-        });
-      }
+  [uiElements.pauseButton, uiElements.restartButton, uiElements.mainMenuButton].forEach(button => {
+    if (button) {
+      setElementStyles(button, {
+        padding: '10px 20px',
+        margin: '10px',
+        backgroundColor: '#00ffaa',
+        color: 'black',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        fontWeight: 'bold',
+        fontSize: '16px'
+      });
     }
-  );
+  });
 
   // Add restart button to game over screen
   if (uiElements.restartButton && !uiElements.gameOverScreen.contains(uiElements.restartButton)) {

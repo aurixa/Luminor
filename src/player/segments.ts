@@ -186,7 +186,7 @@ export function setupSegments(
       }
       if (segment.mesh.material) {
         if (Array.isArray(segment.mesh.material)) {
-          segment.mesh.material.forEach((m) => m.dispose());
+          segment.mesh.material.forEach(m => m.dispose());
         } else {
           segment.mesh.material.dispose();
         }
