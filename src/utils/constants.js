@@ -6,62 +6,52 @@
 
 // Planet configuration
 export const PLANET_CONFIG = {
-    RADIUS: 800,           // Base planet radius
-    RESOLUTION: 128,       // Geometry resolution (segments)
-    CRATER_COUNT: 15,      // Number of craters
-    CRATER_MIN_SIZE: 30,   // Minimum crater size
-    CRATER_MAX_SIZE: 100,  // Maximum crater size
+    RADIUS: 800,  // Base planet radius
+    RESOLUTION: 196,  // Sphere geometry resolution
+};
+
+// Terrain configuration
+export const TERRAIN_CONFIG = {
+    // Main terrain scale factor (higher = more dramatic terrain)
+    HEIGHT_SCALE: 0.8,  // SIGNIFICANTLY INCREASED for dramatic hills
     
-    // Terrain configuration
-    TERRAIN: {
-        // Main terrain scale factor (higher = more dramatic terrain)
-        heightScale: 0.8,
-        
-        // Base noise settings
-        baseFrequency: 0.08,
-        roughness: 0.85,
-        
-        // Large scale undulation settings (main dramatic hills)
-        largeScale: {
-            frequency: 0.025,
-            influence: 1.2,
-        },
-        
-        // Medium scale features (smaller hills, valleys)
-        mediumScale: {
-            frequency: 0.08,
-            influence: 0.5,
-        },
-        
-        // Small scale details
-        smallScale: {
-            frequency: 0.4,
-            influence: 0.08,
-            octaves: 2,
-            persistence: 0.5,
-        },
-        
-        // Ridge settings
-        ridges: {
-            enabled: true,
-            frequency: 0.05,
-            influence: 0.7,
-            sharpness: 1.5,
-        },
-        
-        // Valley settings
-        valleys: {
-            enabled: true,
-            frequency: 0.1,
-            influence: 0.5,
-        }
+    // Base noise settings
+    BASE_FREQUENCY: 0.08, // LOWERED for wider, more dramatic undulations
+    ROUGHNESS: 0.85,     // ADJUSTED for balance between smoothness and detail
+    
+    // Large scale undulation settings (main dramatic hills)
+    LARGE_SCALE: {
+        FREQUENCY: 0.025, // LOWERED for much wider features
+        INFLUENCE: 1.2,   // SIGNIFICANTLY INCREASED for more dramatic terrain
+    },
+    
+    // Medium scale features (smaller hills, valleys)
+    MEDIUM_SCALE: {
+        FREQUENCY: 0.08,  // ADJUSTED for better hill shapes
+        INFLUENCE: 0.5,   // INCREASED for more definition
+    },
+    
+    // Small scale features (local roughness)
+    SMALL_SCALE: {
+        FREQUENCY: 0.2,   // Frequency of small details
+        INFLUENCE: 0.3,   // INCREASED a bit for more noticeable detail
+    },
+    
+    // Crater settings
+    CRATERS: {
+        ENABLED: true,
+        COUNT: 25,         // INCREASED for more interesting terrain
+        MIN_SIZE: 60,      // Minimum crater size
+        MAX_SIZE: 120,     // Maximum crater size
+        DEPTH_FACTOR: 0.2, // How deep craters are relative to size (0-1)
+        RIM_HEIGHT_FACTOR: 0.5, // How high crater rims are (0-1)
     }
 };
 
 // Player configuration
 export const PLAYER_CONFIG = {
     SEGMENT_SIZE: 2.0,      // Size of player segments
-    SPEED: 1.0,             // Base movement speed
+    SPEED: 0.8,             // Base movement speed
     TURN_SPEED: 0.015,      // Turning speed
     MIN_SEGMENT_DISTANCE: 2.0, // Minimum distance between segments
     MAX_SEGMENT_DISTANCE: 3.0, // Maximum distance between segments
@@ -72,9 +62,9 @@ export const PLAYER_CONFIG = {
     TRAIL_ENABLED: true,    // Enable trail effect
     TRAIL_LIFETIME: 2.0,    // Trail particle lifetime
     TRAIL_EMISSION_RATE: 5, // Trail particles per second
-    DEBUG_ALIGNMENT: true,  // Show debug alignment indicators
+    DEBUG_ALIGNMENT: false, // Show debug alignment indicators (disabled for cleaner look)
     ALIGNMENT_LINE_LENGTH: 10, // Length of the alignment indicator lines
-    HISTORY_LENGTH: 10,     // Number of positions to remember per segment
+    HISTORY_LENGTH: 20,     // Number of positions to remember per segment
 };
 
 // Resource configuration
@@ -100,6 +90,7 @@ export const CAMERA_CONFIG = {
     FOV: 75,            // Field of view
     NEAR: 0.1,          // Near clipping plane
     FAR: 1000,          // Far clipping plane
+    INITIAL_POSITION: { x: 0, y: 0, z: 150 }, // Initial camera position
     // Dynamic camera adjustment settings
     SLOPE: {
         UPHILL_HEIGHT_FACTOR: 1.5,    // How much to lower camera on uphill
@@ -146,5 +137,10 @@ export const STARFIELD_CONFIG = {
 export const TERRAIN_MATERIAL_CONFIG = {
     BASE_COLOR: 0x47803a,        // Earth-like green
     HIGH_ELEVATION_COLOR: 0x8a7152, // Mountain brown
-    LOW_ELEVATION_COLOR: 0x2d5a2d   // Valley dark green
+    LOW_ELEVATION_COLOR: 0x2d5a2d,   // Valley dark green
+    TEXTURE_RESOLUTION: 1024,    // Texture resolution
+    NORMAL_MAP_STRENGTH: 1.2,    // Normal map influence
+    ROUGHNESS: 0.7,              // Surface roughness
+    METALNESS: 0.1,              // Surface metalness
+    DETAIL_SCALE: 20             // Detail texture scale
 };

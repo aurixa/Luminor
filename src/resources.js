@@ -13,8 +13,10 @@ import { RESOURCE_CONFIG } from './utils/constants.js';
  * @returns {Object} The resources object with properties and methods
  */
 export function setupResources(scene, planet) {
-    // Array to hold all resources
+    // Arrays to track resources
     const resources = [];
+    const collectedResources = [];
+    let totalCollected = 0;
     
     // Track existing positions to prevent clustering
     const existingPositions = [];
@@ -149,8 +151,11 @@ export function setupResources(scene, planet) {
     let respawnTimer = 0;
     const MAX_ACTIVE_RESOURCES = Math.min(80, RESOURCE_CONFIG.COUNT * RESOURCE_CONFIG.MAX_ACTIVE_RATIO);
     
+    // Return public interface
     return {
         resources,
+        collectedResources,
+        totalCollected,
         
         // Set visibility of all resources
         setVisible: function(visible) {
@@ -160,9 +165,9 @@ export function setupResources(scene, planet) {
         },
         
         // Update resources (animations, etc.)
-        update: function() {
+        update: function(player, deltaTime) {
             // Update respawn timer
-            respawnTimer += 16.67; // Approximately 60fps
+            respawnTimer += deltaTime;
             
             // Check for resource respawn
             if (respawnTimer >= RESOURCE_CONFIG.RESPAWN_INTERVAL) {
@@ -230,6 +235,48 @@ export function setupResources(scene, planet) {
                     resource.mesh.position.copy(newPosition);
                 }
             }
+            
+            // Check for collisions with player
+            for (let i = resources.length - 1; i >= 0; i--) {
+                const resource = resources[i];
+                
+                // Distance check
+                if (player && player.getHeadPosition) {
+                    const headPos = player.getHeadPosition();
+                    const distance = headPos.distanceTo(resource.position);
+                    
+                    // Collect if close enough
+                    if (distance < RESOURCE_CONFIG.COLLECTION_DISTANCE) {
+                        // Hide mesh
+                        resource.mesh.visible = false;
+                        
+                        // Increment counter
+                        totalCollected++;
+                        
+                        // IMPORTANT: Log collection clearly
+                        console.log(`*** RESOURCE COLLECTED ***`);
+                        console.log(`Resource at: X:${resource.position.x.toFixed(2)}, Y:${resource.position.y.toFixed(2)}, Z:${resource.position.z.toFixed(2)}`);
+                        console.log(`Player at: X:${headPos.x.toFixed(2)}, Y:${headPos.y.toFixed(2)}, Z:${headPos.z.toFixed(2)}`);
+                        
+                        // Add growth to player
+                        if (player && player.grow) {
+                            console.log(`*** GROWING PLAYER ***`);
+                            try {
+                                player.grow(1);
+                                console.log(`Player grew! New length: ${player.getSegmentCount()}`);
+                            } catch (error) {
+                                console.error(`Error growing player: ${error.message}`);
+                            }
+                        } else {
+                            console.error(`Cannot grow player - player.grow is not available`);
+                        }
+                        
+                        // Move to collected array after growing the player
+                        collectedResources.push(resource);
+                        resources.splice(i, 1);
+                    }
+                }
+            }
         },
         
         // Check for collisions with player
@@ -263,7 +310,9 @@ export function setupResources(scene, planet) {
                 resource.mesh.material.dispose();
             }
             resources.length = 0;
-        }
+        },
+        
+        getCollectedCount: () => totalCollected
     };
 }
 

@@ -5,21 +5,7 @@
  */
 
 import * as THREE from 'three';
-
-// Starfield configuration
-const STARFIELD_CONFIG = {
-    starCount: 4000,        // Number of stars
-    minRadius: 300,         // Minimum distance from center
-    maxRadius: 900,         // Maximum distance from center
-    minSize: 0.1,           // Minimum star size
-    maxSize: 1.2,           // Maximum star size
-    colors: [               // Star colors
-        0xffffff,  // White
-        0xffffaa,  // Warm white
-        0xaaaaff,  // Bluish
-        0xffaaaa   // Reddish
-    ]
-};
+import { STARFIELD_CONFIG } from '../utils/constants.js';
 
 /**
  * Create a starfield background
@@ -33,14 +19,16 @@ export function createStarField(scene) {
     const starSizes = [];
     
     // Generate random stars
-    for (let i = 0; i < STARFIELD_CONFIG.starCount; i++) {
+    for (let i = 0; i < STARFIELD_CONFIG.STAR_COUNT; i++) {
         // Generate a random position on a sphere
         const phi = Math.random() * Math.PI * 2;
         const theta = Math.acos(Math.random() * 2 - 1);
         
         // Calculate radius with some variation to create depth
-        const radius = STARFIELD_CONFIG.minRadius + 
-            Math.random() * (STARFIELD_CONFIG.maxRadius - STARFIELD_CONFIG.minRadius);
+        const radius = THREE.MathUtils.randFloat(
+            STARFIELD_CONFIG.MIN_RADIUS, 
+            STARFIELD_CONFIG.MAX_RADIUS
+        );
         
         // Convert spherical to cartesian coordinates
         const x = radius * Math.sin(theta) * Math.cos(phi);
@@ -49,9 +37,26 @@ export function createStarField(scene) {
         
         starPositions.push(x, y, z);
         
-        // Random star color
-        const colorIndex = Math.floor(Math.random() * STARFIELD_CONFIG.colors.length);
-        const color = new THREE.Color(STARFIELD_CONFIG.colors[colorIndex]);
+        // Random star color based on type (predominantly white/blue but some variation)
+        let color;
+        const starType = Math.random();
+        
+        if (starType < 0.7) {
+            // White/blue stars (most common)
+            color = new THREE.Color(0xffffff);
+            if (Math.random() > 0.5) {
+                color.setRGB(0.9, 0.9, 1.0);
+            }
+        } else if (starType < 0.85) {
+            // Yellow/orange stars
+            color = new THREE.Color(0xffffaa);
+        } else if (starType < 0.95) {
+            // Red stars
+            color = new THREE.Color(0xffaaaa);
+        } else {
+            // A few bright blue stars
+            color = new THREE.Color(0xaaaaff);
+        }
         
         // Add some brightness variation
         const brightness = 0.7 + Math.random() * 0.3;
@@ -60,8 +65,10 @@ export function createStarField(scene) {
         starColors.push(color.r, color.g, color.b);
         
         // Random star size
-        const size = STARFIELD_CONFIG.minSize + 
-            Math.random() * (STARFIELD_CONFIG.maxSize - STARFIELD_CONFIG.minSize);
+        const size = THREE.MathUtils.randFloat(
+            STARFIELD_CONFIG.MIN_SIZE, 
+            STARFIELD_CONFIG.MAX_SIZE
+        );
         starSizes.push(size);
     }
     
@@ -92,6 +99,11 @@ export function createStarField(scene) {
     // Create points object
     const starField = new THREE.Points(starsGeometry, starsMaterial);
     scene.add(starField);
+    
+    // Add update method for rotation
+    starField.update = (deltaTime) => {
+        starField.rotation.y += 0.00001 * deltaTime;
+    };
     
     return starField;
 } 

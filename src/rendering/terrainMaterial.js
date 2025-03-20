@@ -8,18 +8,6 @@ import * as THREE from 'three';
 import { TERRAIN_MATERIAL_CONFIG } from '../utils/constants.js';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
 
-// Material configuration
-const MATERIAL_CONFIG = {
-    baseColor: new THREE.Color(0x47803a),   // Earth-like green
-    highElevationColor: new THREE.Color(0x8a7152), // Mountain brown
-    lowElevationColor: new THREE.Color(0x2d5a2d),  // Valley dark green
-    textureResolution: 1024,                // Texture resolution
-    normalMapStrength: 1.2,                 // Normal map influence
-    roughness: 0.7,                         // Surface roughness
-    metalness: 0.1,                         // Surface metalness
-    detailScale: 20                         // Detail texture scale
-};
-
 /**
  * Create material for the planet terrain
  * @returns {THREE.Material} The configured material
@@ -30,14 +18,14 @@ export function createTerrainMaterial() {
     
     // Create physical material with textures
     const material = new THREE.MeshStandardMaterial({
-        baseColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.BASE_COLOR),
-        highElevationColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.HIGH_ELEVATION_COLOR),
-        lowElevationColor: new THREE.Color(TERRAIN_MATERIAL_CONFIG.LOW_ELEVATION_COLOR),
         map: diffuseMap,
         normalMap: normalMap,
-        normalScale: new THREE.Vector2(MATERIAL_CONFIG.normalMapStrength, MATERIAL_CONFIG.normalMapStrength),
-        roughness: MATERIAL_CONFIG.roughness,
-        metalness: MATERIAL_CONFIG.metalness,
+        normalScale: new THREE.Vector2(
+            TERRAIN_MATERIAL_CONFIG.NORMAL_MAP_STRENGTH, 
+            TERRAIN_MATERIAL_CONFIG.NORMAL_MAP_STRENGTH
+        ),
+        roughness: TERRAIN_MATERIAL_CONFIG.ROUGHNESS,
+        metalness: TERRAIN_MATERIAL_CONFIG.METALNESS,
         side: THREE.FrontSide,
         flatShading: false
     });
@@ -50,82 +38,82 @@ export function createTerrainMaterial() {
  * @returns {Object} Object containing the generated textures
  */
 function generateTerrainTextures() {
-    const resolution = MATERIAL_CONFIG.textureResolution;
+    // Create a noise generator
     const noise = new SimplexNoise();
     
-    // Create data arrays for textures
-    const diffuseData = new Uint8Array(resolution * resolution * 4);
-    const normalData = new Uint8Array(resolution * resolution * 4);
+    // Generate texture data
+    const textureSize = TERRAIN_MATERIAL_CONFIG.TEXTURE_RESOLUTION;
+    const diffuseData = new Uint8Array(textureSize * textureSize * 4);
+    const normalData = new Uint8Array(textureSize * textureSize * 4);
     
-    // Generate the texture data
-    for (let y = 0; y < resolution; y++) {
-        for (let x = 0; x < resolution; x++) {
-            const index = (y * resolution + x) * 4;
+    // Generate texture data
+    for (let y = 0; y < textureSize; y++) {
+        for (let x = 0; x < textureSize; x++) {
+            // Normalize coordinates
+            const nx = x / textureSize;
+            const ny = y / textureSize;
             
-            // Normalized coordinates
-            const nx = x / resolution;
-            const ny = y / resolution;
+            // Calculate pixel index
+            const i = (y * textureSize + x) * 4;
             
-            // Calculate noise
+            // Generate terrain data for this pixel
             const elevation = sampleNoiseForTexture(nx, ny, noise);
-            const moistureNoise = sampleNoiseForTexture(nx + 0.5, ny + 0.5, noise, 2.5);
+            const moisture = sampleNoiseForTexture(nx + 0.5, ny + 0.5, noise, 0.5);
             
-            // Generate color based on elevation and moisture
-            const color = calculateTerrainColor(elevation, moistureNoise);
+            // Calculate color based on elevation and moisture
+            const color = calculateTerrainColor(elevation, moisture);
             
-            // Set diffuse color
-            diffuseData[index] = color.r * 255;
-            diffuseData[index + 1] = color.g * 255;
-            diffuseData[index + 2] = color.b * 255;
-            diffuseData[index + 3] = 255; // Alpha
+            // Set diffuse pixel
+            diffuseData[i] = color.r;
+            diffuseData[i + 1] = color.g;
+            diffuseData[i + 2] = color.b;
+            diffuseData[i + 3] = 255; // Alpha
             
-            // Calculate normal for this point using central differences
-            if (x > 0 && x < resolution - 1 && y > 0 && y < resolution - 1) {
-                const elevL = sampleNoiseForTexture((x - 1) / resolution, ny, noise);
-                const elevR = sampleNoiseForTexture((x + 1) / resolution, ny, noise);
-                const elevT = sampleNoiseForTexture(nx, (y - 1) / resolution, noise);
-                const elevB = sampleNoiseForTexture(nx, (y + 1) / resolution, noise);
+            // Calculate normal
+            if (x > 0 && x < textureSize - 1 && y > 0 && y < textureSize - 1) {
+                const elevL = sampleNoiseForTexture((x - 1) / textureSize, ny, noise);
+                const elevR = sampleNoiseForTexture((x + 1) / textureSize, ny, noise);
+                const elevT = sampleNoiseForTexture(nx, (y - 1) / textureSize, noise);
+                const elevB = sampleNoiseForTexture(nx, (y + 1) / textureSize, noise);
                 
                 // Calculate derivatives
                 const dX = (elevR - elevL) / 2.0;
                 const dY = (elevB - elevT) / 2.0;
                 
                 // Generate normal map
-                normalData[index] = Math.floor(128 + dX * 128);
-                normalData[index + 1] = Math.floor(128 + dY * 128);
-                normalData[index + 2] = 255; // Z component (up)
-                normalData[index + 3] = 255; // Alpha
+                normalData[i] = Math.floor(128 + dX * 128);
+                normalData[i + 1] = Math.floor(128 + dY * 128);
+                normalData[i + 2] = 255; // Z component (up)
+                normalData[i + 3] = 255; // Alpha
             } else {
                 // Default normal for edges
-                normalData[index] = 128;
-                normalData[index + 1] = 128;
-                normalData[index + 2] = 255;
-                normalData[index + 3] = 255;
+                normalData[i] = 128;
+                normalData[i + 1] = 128;
+                normalData[i + 2] = 255;
+                normalData[i + 3] = 255;
             }
         }
     }
     
-    // Create the textures from data
+    // Create textures
     const diffuseMap = new THREE.DataTexture(
         diffuseData, 
-        resolution, 
-        resolution, 
+        textureSize, 
+        textureSize, 
         THREE.RGBAFormat
     );
     diffuseMap.wrapS = THREE.RepeatWrapping;
     diffuseMap.wrapT = THREE.RepeatWrapping;
-    diffuseMap.repeat.set(4, 2);
     diffuseMap.needsUpdate = true;
     
     const normalMap = new THREE.DataTexture(
         normalData, 
-        resolution, 
-        resolution, 
+        textureSize, 
+        textureSize, 
         THREE.RGBAFormat
     );
     normalMap.wrapS = THREE.RepeatWrapping;
     normalMap.wrapT = THREE.RepeatWrapping;
-    normalMap.repeat.set(4, 2);
     normalMap.needsUpdate = true;
     
     return { diffuseMap, normalMap };
@@ -140,7 +128,7 @@ function generateTerrainTextures() {
  * @returns {number} Noise value
  */
 function sampleNoiseForTexture(x, y, noise, scale = 1.0) {
-    const baseScale = MATERIAL_CONFIG.detailScale * scale;
+    const baseScale = TERRAIN_MATERIAL_CONFIG.DETAIL_SCALE * scale;
     
     // Multi-octave noise for more interesting textures
     const n1 = noise.noise(x * baseScale, y * baseScale);
@@ -160,17 +148,17 @@ function calculateTerrainColor(elevation, moisture) {
     const color = new THREE.Color();
     
     // Start with base color
-    color.copy(MATERIAL_CONFIG.baseColor);
+    color.copy(TERRAIN_MATERIAL_CONFIG.BASE_COLOR);
     
     // Blend with elevation colors
     if (elevation > 0.2) {
         // Higher elevations - blend with mountain color
         const blendFactor = (elevation - 0.2) / 0.8;
-        color.lerp(MATERIAL_CONFIG.highElevationColor, blendFactor);
+        color.lerp(TERRAIN_MATERIAL_CONFIG.HIGH_ELEVATION_COLOR, blendFactor);
     } else if (elevation < -0.2) {
         // Lower elevations - blend with valley color
         const blendFactor = (-elevation - 0.2) / 0.8;
-        color.lerp(MATERIAL_CONFIG.lowElevationColor, blendFactor);
+        color.lerp(TERRAIN_MATERIAL_CONFIG.LOW_ELEVATION_COLOR, blendFactor);
     }
     
     // Add moisture influence

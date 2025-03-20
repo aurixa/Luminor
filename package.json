@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "eslint": "^9.22.0",
     "three": "^0.159.0"
   },
   "devDependencies": {

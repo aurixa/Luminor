@@ -1,66 +1,98 @@
 /**
  * Luminor
- * Lighting setup
+ * Lighting system setup and management
  * Code written by a mixture of AI (2025)
  */
 
 import * as THREE from 'three';
-
-// Lighting configuration
-const LIGHTING_CONFIG = {
-    ambient: {
-        color: 0x666666,
-        intensity: 0.7
-    },
-    sun: {
-        color: 0xffffdd,
-        intensity: 1.4,
-        position: new THREE.Vector3(200, 100, 200),
-        shadowMapSize: 4096
-    }
-};
+import { LIGHTING_CONFIG } from '../utils/constants.js';
 
 /**
- * Setup scene lighting
- * @param {THREE.Scene} scene - The Three.js scene
- * @returns {Object} References to the created lights
+ * Setup all lighting for the scene
  */
 export function setupLighting(scene) {
-    // Create ambient light for base illumination
-    const ambientLight = new THREE.AmbientLight(
-        LIGHTING_CONFIG.ambient.color, 
-        LIGHTING_CONFIG.ambient.intensity
-    );
+    // Set scene background color
+    scene.background = new THREE.Color(LIGHTING_CONFIG.BACKGROUND_COLOR);
+    
+    // Add ambient light for base illumination
+    const ambientLight = createAmbientLight();
     scene.add(ambientLight);
     
-    // Create directional light (sun)
-    const sunLight = new THREE.DirectionalLight(
-        LIGHTING_CONFIG.sun.color, 
-        LIGHTING_CONFIG.sun.intensity
-    );
-    
-    // Configure sun position
-    sunLight.position.copy(LIGHTING_CONFIG.sun.position);
-    
-    // Configure shadows
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = LIGHTING_CONFIG.sun.shadowMapSize;
-    sunLight.shadow.mapSize.height = LIGHTING_CONFIG.sun.shadowMapSize;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 1000;
-    
-    // Adjust shadow camera to fit the planet
-    const shadowSize = 900;
-    sunLight.shadow.camera.left = -shadowSize;
-    sunLight.shadow.camera.right = shadowSize;
-    sunLight.shadow.camera.top = shadowSize;
-    sunLight.shadow.camera.bottom = -shadowSize;
-    
+    // Add main directional light (sun)
+    const sunLight = createSunLight();
     scene.add(sunLight);
     
-    // Return references to lights for potential later adjustments
+    // Add fill light from opposite side
+    const fillLight = createFillLight();
+    scene.add(fillLight);
+    
     return {
         ambientLight,
-        sunLight
+        sunLight,
+        fillLight
     };
+}
+
+/**
+ * Create ambient light
+ */
+function createAmbientLight() {
+    const light = new THREE.AmbientLight(
+        LIGHTING_CONFIG.AMBIENT_LIGHT.COLOR, 
+        LIGHTING_CONFIG.AMBIENT_LIGHT.INTENSITY
+    );
+    
+    return light;
+}
+
+/**
+ * Create directional sun light
+ */
+function createSunLight() {
+    const light = new THREE.DirectionalLight(
+        LIGHTING_CONFIG.SUN_LIGHT.COLOR, 
+        LIGHTING_CONFIG.SUN_LIGHT.INTENSITY
+    );
+    
+    // Set position
+    light.position.set(
+        LIGHTING_CONFIG.SUN_LIGHT.POSITION.x,
+        LIGHTING_CONFIG.SUN_LIGHT.POSITION.y,
+        LIGHTING_CONFIG.SUN_LIGHT.POSITION.z
+    );
+    
+    // Configure shadows
+    light.castShadow = true;
+    light.shadow.mapSize.width = 4096;
+    light.shadow.mapSize.height = 4096;
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 1000;
+    
+    // Set shadow camera size
+    const shadowSize = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_SIZE;
+    light.shadow.camera.left = -shadowSize;
+    light.shadow.camera.right = shadowSize;
+    light.shadow.camera.top = shadowSize;
+    light.shadow.camera.bottom = -shadowSize;
+    
+    return light;
+}
+
+/**
+ * Create fill light (opposite to sun)
+ */
+function createFillLight() {
+    const light = new THREE.DirectionalLight(
+        LIGHTING_CONFIG.FILL_LIGHT.COLOR,
+        LIGHTING_CONFIG.FILL_LIGHT.INTENSITY
+    );
+    
+    // Set position
+    light.position.set(
+        LIGHTING_CONFIG.FILL_LIGHT.POSITION.x,
+        LIGHTING_CONFIG.FILL_LIGHT.POSITION.y,
+        LIGHTING_CONFIG.FILL_LIGHT.POSITION.z
+    );
+    
+    return light;
 } 

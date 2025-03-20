@@ -1,6 +1,6 @@
 /**
  * Luminor
- * Game UI system
+ * Game UI system - consolidated UI management
  * Code written by a mixture of AI (2025)
  */
 
@@ -13,8 +13,11 @@
 export function setupUI(gameState, startGame) {
     // Get UI elements or create them if they don't exist
     const uiElements = {
+        loadingScreen: document.getElementById('loading-screen'),
+        startButton: document.getElementById('start-button'),
         gameOverScreen: getOrCreateElement('game-over-screen', 'div'),
         hudContainer: getOrCreateElement('hud-container', 'div'),
+        scoreDisplay: getOrCreateElement('score-display', 'div'),
         lengthDisplay: getOrCreateElement('length-display', 'div'),
         pauseButton: getOrCreateElement('pause-button', 'button'),
         restartButton: getOrCreateElement('restart-button', 'button'),
@@ -22,249 +25,355 @@ export function setupUI(gameState, startGame) {
         finalLength: getOrCreateElement('final-length', 'span')
     };
     
+    // Update the start button text to "PLAY"
+    if (uiElements.startButton) {
+        uiElements.startButton.textContent = 'PLAY';
+    }
+    
     // Setup the UI elements if they're new
     setupUIStyles(uiElements);
     
     // Add elements directly to the body to ensure they're on top
     for (const key in uiElements) {
-        if (uiElements[key] && !document.body.contains(uiElements[key])) {
+        if (uiElements[key] && !document.body.contains(uiElements[key]) && 
+            key !== 'loadingScreen' && key !== 'startButton') {
             document.body.appendChild(uiElements[key]);
         }
     }
     
-    // Get existing loading screen elements
-    const loadingScreen = document.getElementById('loading-screen');
-    const startButton = document.getElementById('start-button');
-    
     // Make sure the game over screen is hidden at start
     hideElement(uiElements.gameOverScreen);
     
-    // Setup event listeners for existing start button
-    if (startButton) {
-        startButton.addEventListener('click', () => {
-            if (loadingScreen) loadingScreen.style.display = 'none';
+    // Setup event listeners
+    setupEventListeners(uiElements, gameState, startGame);
+    
+    // Return the UI controller interface
+    return {
+        updateUI: (state = gameState) => updateGameUI(uiElements, state),
+        updateScore: (score) => updateScoreDisplay(uiElements, score),
+        updateResourceCount: () => {}, // No-op function as we're removing resources display
+        showGameOver: (finalScore) => showGameOverScreen(uiElements, finalScore)
+    };
+}
+
+/**
+ * Setup event listeners for UI elements
+ */
+function setupEventListeners(uiElements, gameState, startGame) {
+    // Start/play button
+    if (uiElements.startButton) {
+        uiElements.startButton.addEventListener('click', () => {
+            if (uiElements.loadingScreen) hideElement(uiElements.loadingScreen);
             hideElement(uiElements.gameOverScreen);
             startGame();
         });
     }
     
-    // Main menu button - go back to the main menu
+    // Main menu button
     if (uiElements.mainMenuButton) {
         uiElements.mainMenuButton.addEventListener('click', function() {
-            console.log("Main menu button clicked, reloading page");
-            window.location.reload();
+            console.log("Main menu button clicked, cleaning up resources and reloading page");
+            
+            // Create and dispatch a custom event to signal resource cleanup
+            const cleanupEvent = new CustomEvent('luminorCleanup', {
+                detail: { source: 'mainMenuButton' }
+            });
+            document.dispatchEvent(cleanupEvent);
+            
+            // Short timeout to allow cleanup to complete before reload
+            setTimeout(() => {
+                window.location.reload();
+            }, 100);
         });
     }
     
-    // Pause button functionality - only pause player movement
+    // Pause button
     if (uiElements.pauseButton) {
         uiElements.pauseButton.textContent = 'PAUSE';
         uiElements.pauseButton.addEventListener('click', () => {
             gameState.isPaused = !gameState.isPaused;
+            updateGameUI(uiElements, gameState);
         });
     }
     
-    // Restart button functionality
+    // Restart button
     if (uiElements.restartButton) {
         uiElements.restartButton.textContent = 'RESTART';
+        uiElements.restartButton.addEventListener('click', () => {
+            console.log("Restart button clicked");
+            // Set game as ended but don't restart yet
+            gameState.gameHasEnded = true;
+            gameState.isPlaying = false;
+            // Stop game loop if it's running (through gameState)
+            gameState.isPaused = true;
+            // Show game over screen with current score
+            showGameOverScreen(uiElements, gameState.playerLength);
+            // Update UI to reflect game over state
+            updateGameUI(uiElements, gameState);
+        });
     }
-    
-    // Function to update the UI
-    function updateGameUI() {
-        // Update based on game state
-        if (gameState.isPlaying) {
-            if (loadingScreen) loadingScreen.style.display = 'none';
-            hideElement(uiElements.gameOverScreen);
-            showElement(uiElements.hudContainer);
-            showElement(uiElements.pauseButton);
-            showElement(uiElements.restartButton);
-            
-            // Update HUD values
-            if (uiElements.lengthDisplay) {
-                uiElements.lengthDisplay.textContent = `Length: ${gameState.playerLength}`;
-            }
-        } else {
-            // Game is not playing
-            hideElement(uiElements.hudContainer);
-            hideElement(uiElements.pauseButton);
-            hideElement(uiElements.restartButton);
-            
-            // Initial state when first loading the game
-            if (gameState.playerLength === 3 && !gameState.gameHasEnded) {
-                // Initial load - show loading screen
-                if (loadingScreen) loadingScreen.style.display = 'flex';
-                hideElement(uiElements.gameOverScreen);
-            } else {
-                // Game over - always show game over screen
-                showElement(uiElements.gameOverScreen);
-                
-                // Update final stats
-                if (uiElements.finalLength) {
-                    uiElements.finalLength.textContent = gameState.playerLength;
-                }
-            }
-        }
-    }
-    
-    // Initial UI update
-    updateGameUI();
-    
-    // Return the UI controller
-    return {
-        elements: uiElements,
-        updateUI: updateGameUI
-    };
 }
 
-// Helper function to get or create UI elements
+/**
+ * Update the game UI based on game state
+ */
+function updateGameUI(uiElements, gameState) {
+    // Update based on game state
+    if (gameState.isPlaying) {
+        if (uiElements.loadingScreen) hideElement(uiElements.loadingScreen);
+        hideElement(uiElements.gameOverScreen);
+        showElement(uiElements.hudContainer);
+        showElement(uiElements.pauseButton);
+        showElement(uiElements.restartButton);
+        
+        // Update HUD values
+        if (uiElements.lengthDisplay) {
+            uiElements.lengthDisplay.textContent = `Length: ${gameState.playerLength}`;
+        }
+        
+        // Handle pause state
+        if (gameState.isPaused) {
+            uiElements.pauseButton.textContent = 'RESUME';
+            // Show pause overlay
+            showPauseOverlay();
+        } else {
+            uiElements.pauseButton.textContent = 'PAUSE';
+            // Hide pause overlay
+            hidePauseOverlay();
+        }
+    } else {
+        // Game is not playing
+        hideElement(uiElements.hudContainer);
+        hideElement(uiElements.pauseButton);
+        hideElement(uiElements.restartButton);
+        
+        // Initial state when first loading the game
+        if (gameState.playerLength === 3 && !gameState.gameHasEnded) {
+            // Initial load - show loading screen with start button
+            if (uiElements.loadingScreen) {
+                showElement(uiElements.loadingScreen);
+                // Make sure the start button is visible
+                if (uiElements.startButton) {
+                    uiElements.startButton.style.display = 'block';
+                }
+            }
+        } else if (gameState.gameHasEnded) {
+            // Game over state
+            showGameOverScreen(uiElements, gameState.playerLength);
+        }
+    }
+}
+
+/**
+ * Update the score display
+ */
+function updateScoreDisplay(uiElements, score) {
+    if (uiElements.scoreDisplay) {
+        uiElements.scoreDisplay.textContent = `Length: ${score}`;
+    }
+    
+    if (uiElements.lengthDisplay) {
+        uiElements.lengthDisplay.textContent = `Length: ${score}`;
+    }
+}
+
+/**
+ * Show the game over screen
+ */
+function showGameOverScreen(uiElements, finalScore) {
+    if (uiElements.gameOverScreen) {
+        showElement(uiElements.gameOverScreen);
+        if (uiElements.finalLength) {
+            uiElements.finalLength.textContent = finalScore;
+        }
+    }
+}
+
+/**
+ * Create a pause overlay element
+ */
+function showPauseOverlay() {
+    let pauseOverlay = document.getElementById('pause-overlay');
+    if (!pauseOverlay) {
+        pauseOverlay = document.createElement('div');
+        pauseOverlay.id = 'pause-overlay';
+        pauseOverlay.style.position = 'fixed';
+        pauseOverlay.style.top = '0';
+        pauseOverlay.style.left = '0';
+        pauseOverlay.style.width = '100%';
+        pauseOverlay.style.height = '100%';
+        pauseOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        pauseOverlay.style.color = 'white';
+        pauseOverlay.style.display = 'flex';
+        pauseOverlay.style.justifyContent = 'center';
+        pauseOverlay.style.alignItems = 'center';
+        pauseOverlay.style.fontSize = '32px';
+        pauseOverlay.style.fontFamily = 'Arial, sans-serif';
+        pauseOverlay.style.zIndex = '1000';
+        pauseOverlay.textContent = 'PAUSED';
+        document.body.appendChild(pauseOverlay);
+    } else {
+        pauseOverlay.style.display = 'flex';
+    }
+}
+
+/**
+ * Hide the pause overlay
+ */
+function hidePauseOverlay() {
+    const pauseOverlay = document.getElementById('pause-overlay');
+    if (pauseOverlay) {
+        pauseOverlay.style.display = 'none';
+    }
+}
+
+/**
+ * Create a start screen element
+ * @deprecated Use the existing loading screen instead
+ */
+function createStartScreen() {
+    return document.getElementById('loading-screen');
+}
+
+/**
+ * Get an element by ID or create it if it doesn't exist
+ */
 function getOrCreateElement(id, tagName) {
     let element = document.getElementById(id);
-    
     if (!element) {
         element = document.createElement(tagName);
         element.id = id;
     }
-    
     return element;
 }
 
-// Helper to show an element
-function showElement(element) {
-    if (element) {
-        element.style.display = 'block';
-        element.classList.remove('hidden');
+/**
+ * Setup styles for UI elements
+ */
+function setupUIStyles(uiElements) {
+    // Set up the HUD container for buttons
+    if (uiElements.hudContainer) {
+        uiElements.hudContainer.style.position = 'fixed';
+        uiElements.hudContainer.style.top = '10px';
+        uiElements.hudContainer.style.right = '10px';
+        uiElements.hudContainer.style.padding = '10px';
+        uiElements.hudContainer.style.display = 'flex';
+        uiElements.hudContainer.style.justifyContent = 'flex-end';
+        uiElements.hudContainer.style.zIndex = '100';
+    }
+    
+    // Set up the score display in center
+    if (uiElements.scoreDisplay) {
+        uiElements.scoreDisplay.style.position = 'fixed';
+        uiElements.scoreDisplay.style.top = '10px';
+        uiElements.scoreDisplay.style.left = '50%';
+        uiElements.scoreDisplay.style.transform = 'translateX(-50%)';
+        uiElements.scoreDisplay.style.padding = '10px';
+        uiElements.scoreDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        uiElements.scoreDisplay.style.color = 'white';
+        uiElements.scoreDisplay.style.fontFamily = 'Arial, sans-serif';
+        uiElements.scoreDisplay.style.fontSize = '24px';
+        uiElements.scoreDisplay.style.borderRadius = '5px';
+        uiElements.scoreDisplay.style.zIndex = '100';
+        uiElements.scoreDisplay.textContent = 'Length: 3';
+    }
+    
+    // Remove the length display from HUD as we now have score display in center
+    if (uiElements.lengthDisplay) {
+        uiElements.lengthDisplay.style.display = 'none';
+    }
+    
+    if (uiElements.gameOverScreen) {
+        uiElements.gameOverScreen.style.position = 'fixed';
+        uiElements.gameOverScreen.style.top = '0';
+        uiElements.gameOverScreen.style.left = '0';
+        uiElements.gameOverScreen.style.width = '100%';
+        uiElements.gameOverScreen.style.height = '100%';
+        uiElements.gameOverScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        uiElements.gameOverScreen.style.color = 'white';
+        uiElements.gameOverScreen.style.display = 'flex';
+        uiElements.gameOverScreen.style.flexDirection = 'column';
+        uiElements.gameOverScreen.style.justifyContent = 'center';
+        uiElements.gameOverScreen.style.alignItems = 'center';
+        uiElements.gameOverScreen.style.fontSize = '32px';
+        uiElements.gameOverScreen.style.fontFamily = 'Arial, sans-serif';
+        uiElements.gameOverScreen.style.zIndex = '1000';
+        
+        const gameOverTitle = document.createElement('h1');
+        gameOverTitle.textContent = 'GAME OVER';
+        gameOverTitle.style.color = '#ff3333';
+        gameOverTitle.style.fontSize = '48px';
+        gameOverTitle.style.marginBottom = '20px';
+        
+        const finalScoreText = document.createElement('div');
+        finalScoreText.innerHTML = `Final Length: <span id="final-length">0</span>`;
+        finalScoreText.style.marginBottom = '30px';
+        
+        uiElements.finalLength = finalScoreText.querySelector('#final-length');
+        
+        uiElements.gameOverScreen.appendChild(gameOverTitle);
+        uiElements.gameOverScreen.appendChild(finalScoreText);
+    }
+    
+    if (uiElements.pauseButton) {
+        uiElements.pauseButton.style.position = 'fixed';
+        uiElements.pauseButton.style.top = '10px';
+        uiElements.pauseButton.style.right = '130px'; // Position to the left of restart button
+        uiElements.pauseButton.style.backgroundColor = '#00ffaa';
+        uiElements.pauseButton.style.color = 'black';
+        uiElements.pauseButton.style.border = 'none';
+        uiElements.pauseButton.style.padding = '10px 20px';
+        uiElements.pauseButton.style.fontSize = '18px';
+        uiElements.pauseButton.style.borderRadius = '5px';
+        uiElements.pauseButton.style.cursor = 'pointer';
+        uiElements.pauseButton.style.zIndex = '100';
+    }
+    
+    if (uiElements.restartButton) {
+        uiElements.restartButton.style.position = 'fixed';
+        uiElements.restartButton.style.top = '10px';
+        uiElements.restartButton.style.right = '10px'; // Position at far right
+        uiElements.restartButton.style.backgroundColor = '#00ffaa';
+        uiElements.restartButton.style.color = 'black';
+        uiElements.restartButton.style.border = 'none';
+        uiElements.restartButton.style.padding = '10px 20px';
+        uiElements.restartButton.style.fontSize = '18px';
+        uiElements.restartButton.style.borderRadius = '5px';
+        uiElements.restartButton.style.cursor = 'pointer';
+        uiElements.restartButton.style.zIndex = '100';
+    }
+    
+    if (uiElements.mainMenuButton) {
+        uiElements.mainMenuButton.textContent = 'MAIN MENU';
+        uiElements.mainMenuButton.style.backgroundColor = '#00ffaa';
+        uiElements.mainMenuButton.style.color = 'black';
+        uiElements.mainMenuButton.style.border = 'none';
+        uiElements.mainMenuButton.style.padding = '15px 30px';
+        uiElements.mainMenuButton.style.fontSize = '18px';
+        uiElements.mainMenuButton.style.borderRadius = '5px';
+        uiElements.mainMenuButton.style.cursor = 'pointer';
+        uiElements.mainMenuButton.style.marginTop = '20px';
+        
+        if (uiElements.gameOverScreen) {
+            uiElements.gameOverScreen.appendChild(uiElements.mainMenuButton);
+        }
     }
 }
 
-// Helper to hide an element
+/**
+ * Helper function to show an element
+ */
+function showElement(element) {
+    if (element) {
+        element.style.display = element.tagName.toLowerCase() === 'div' ? 'flex' : 'block';
+    }
+}
+
+/**
+ * Helper function to hide an element
+ */
 function hideElement(element) {
     if (element) {
         element.style.display = 'none';
-        element.classList.add('hidden');
-    }
-}
-
-// Setup the UI styles
-function setupUIStyles(elements) {
-    // Add CSS class to body if it doesn't have it
-    if (!document.querySelector('style#game-ui-styles')) {
-        const style = document.createElement('style');
-        style.id = 'game-ui-styles';
-        style.textContent = `
-            .hidden { display: none !important; }
-            
-            #game-over-screen {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                text-align: center;
-                color: white;
-                background-color: rgba(0, 0, 0, 0.7);
-                padding: 2rem;
-                border-radius: 1rem;
-                z-index: 2000; /* Increase z-index to be higher than anything else */
-                display: none; /* Start hidden by default */
-            }
-            
-            #main-menu-button {
-                padding: 1rem 2rem;
-                font-size: 1.5rem;
-                background-color: #00ffaa;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                color: #000;
-                font-weight: bold;
-                margin: 10px;
-                position: relative;
-                z-index: 2001; /* Higher than the game over screen */
-                pointer-events: auto; /* Ensure it can be clicked */
-            }
-            
-            #hud-container {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 1rem;
-                z-index: 100;
-                text-align: center;
-            }
-            
-            #length-display {
-                color: white;
-                font-size: 1.5rem;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-                font-weight: bold;
-            }
-            
-            #pause-button, #restart-button {
-                position: fixed;
-                top: 1rem;
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 0.5rem 1rem;
-                cursor: pointer;
-                font-size: 1rem;
-                z-index: 1000;
-            }
-            
-            #pause-button {
-                right: 9rem;
-            }
-            
-            #restart-button {
-                right: 1rem;
-            }
-            
-            #pause-button:hover, #restart-button:hover {
-                background-color: rgba(0, 0, 0, 0.9);
-            }
-            
-            #final-length {
-                font-weight: bold;
-                font-size: 1.2em;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    
-    // Setup HUD
-    if (elements.hudContainer) {
-        elements.hudContainer.innerHTML = '';
-        
-        if (elements.lengthDisplay) {
-            elements.hudContainer.appendChild(elements.lengthDisplay);
-            elements.lengthDisplay.textContent = 'Length: 3';
-        }
-    }
-    
-    // Setup game over screen
-    if (elements.gameOverScreen) {
-        elements.gameOverScreen.innerHTML = `
-            <h1>GAME OVER</h1>
-            <p>Length: <span id="final-length">3</span></p>
-            <div class="game-over-buttons">
-                <button id="main-menu-button" onclick="window.location.reload()">MAIN MENU</button>
-            </div>
-        `;
-        
-        // Get references to the elements for updating values
-        elements.finalLength = document.getElementById('final-length');
-    }
-    
-    // Setup game control buttons
-    if (elements.pauseButton) {
-        elements.pauseButton.textContent = 'PAUSE';
-    }
-
-    if (elements.restartButton) {
-        elements.restartButton.textContent = 'RESTART';
     }
 } 
