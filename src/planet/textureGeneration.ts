@@ -5,11 +5,28 @@
  */
 
 import * as THREE from 'three';
+import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+
+interface TextureNoiseValues {
+    base: number;
+    variation: number;
+    mix: number;
+    nx: number;
+    ny: number;
+    noise?: SimplexNoise;
+}
+
+interface PlanetTextures {
+    diffuseMap: THREE.DataTexture;
+    normalMap: THREE.DataTexture;
+}
 
 /**
  * Generate textures for the planet
+ * @param {SimplexNoise} noise - The noise generator
+ * @returns {PlanetTextures} Object containing the generated textures
  */
-export function generatePlanetTextures(noise) {
+export function generatePlanetTextures(noise: SimplexNoise): PlanetTextures {
     // Create texture data
     const textureSize = 1024;
     const diffuseData = new Uint8Array(textureSize * textureSize * 4);
@@ -46,8 +63,12 @@ export function generatePlanetTextures(noise) {
 
 /**
  * Generate noise values for texture generation
+ * @param {number} nx - Normalized x coordinate
+ * @param {number} ny - Normalized y coordinate
+ * @param {SimplexNoise} noise - The noise generator
+ * @returns {TextureNoiseValues} Object containing noise values
  */
-function generateTextureNoiseValues(nx, ny, noise) {
+function generateTextureNoiseValues(nx: number, ny: number, noise: SimplexNoise): TextureNoiseValues {
     // Use consistent z coordinate for 3D noise
     const nz = nx * 0.5 + ny * 0.5;
     
@@ -85,8 +106,11 @@ function generateTextureNoiseValues(nx, ny, noise) {
 
 /**
  * Set diffuse texture pixel color
+ * @param {Uint8Array} data - The pixel data array
+ * @param {number} index - The index in the array
+ * @param {TextureNoiseValues} noise - The noise values
  */
-function setDiffusePixel(data, index, noise) {
+function setDiffusePixel(data: Uint8Array, index: number, noise: TextureNoiseValues): void {
     // Enhanced terrain color palette with better contrast
     let r = 80 + noise.base * 40 + noise.variation * 30;
     let g = 135 + noise.base * 30 - noise.mix * 40;
@@ -113,8 +137,21 @@ function setDiffusePixel(data, index, noise) {
 
 /**
  * Set normal map pixel color
+ * @param {Uint8Array} data - The pixel data array
+ * @param {number} index - The index in the array
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ * @param {number} textureSize - Size of the texture
+ * @param {TextureNoiseValues} noiseValues - The noise values
  */
-function setNormalPixel(data, index, x, y, textureSize, noiseValues) {
+function setNormalPixel(
+    data: Uint8Array, 
+    index: number, 
+    x: number, 
+    y: number, 
+    textureSize: number, 
+    noiseValues: TextureNoiseValues
+): void {
     // Retrieve original coordinates
     const nx = noiseValues.nx;
     const ny = noiseValues.ny;
@@ -128,7 +165,16 @@ function setNormalPixel(data, index, x, y, textureSize, noiseValues) {
     
     // Calculate height differences with stronger effect
     const strength = 3.0; // Increased normal strength for more detailed terrain
-    const noise = noiseValues.noise || {};
+    const noise = noiseValues.noise;
+    
+    if (!noise) {
+        // Default normal if noise is not available
+        data[index] = 128;
+        data[index + 1] = 128;
+        data[index + 2] = 255;
+        data[index + 3] = 255;
+        return;
+    }
     
     // Use noise function for sample points
     const hl = generateTextureNoiseValues(nxl, ny, noise).base;
@@ -155,8 +201,11 @@ function setNormalPixel(data, index, x, y, textureSize, noiseValues) {
 
 /**
  * Create a Three.js texture from pixel data
+ * @param {Uint8Array} data - The pixel data array
+ * @param {number} size - Size of the texture
+ * @returns {THREE.DataTexture} The created texture
  */
-function createThreeTexture(data, size) {
+function createThreeTexture(data: Uint8Array, size: number): THREE.DataTexture {
     const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;

@@ -10,7 +10,7 @@ import * as THREE from 'three';
  * Setup the WebGL renderer
  * @returns {THREE.WebGLRenderer} The configured renderer
  */
-export function setupRenderer() {
+export function setupRenderer(): THREE.WebGLRenderer {
     const renderer = new THREE.WebGLRenderer({ 
         antialias: true, 
         alpha: true 

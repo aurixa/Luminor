@@ -1,61 +1,80 @@
-# Luminor - Planetary Adventure
+# Luminor
 
-A web-based 3D game built with Three.js, created entirely through AI collaboration.
+A 3D browser-based game where players navigate a procedurally generated planet collecting energy.
 
-## About
+## Project Improvements
 
-Luminor is an innovative web-based game that leverages the power of Three.js to create immersive 3D experiences. This project is unique in that it's being developed entirely through AI-assisted programming, pushing the boundaries of what's possible in game development.
+We've made several key improvements to the codebase:
 
-## Technology Stack
+1. **ESLint Integration** - Added linting for code quality and consistency
+2. **TypeScript Migration** - Converting JavaScript to TypeScript for type safety
+3. **Code Organization** - Better structure and separation of concerns
+4. **Build Optimization** - Improved build process and performance
 
-- Three.js for 3D rendering
-- Web technologies (HTML5, CSS3, JavaScript)
-- Vite for development and building
+## Current Status
 
-## Project Structure
+- ✅ ESLint with flat config format
+- ✅ TypeScript configuration and initial migration
+- ✅ Fixed "callbacks is not defined" bug
+- ✅ Improved code organization documentation
+- ✅ Added build optimization recommendations
 
-The project has been organized into a modular architecture:
+## Documentation
 
-- `src/core/` - Core game systems (game loop, controls)
-- `src/entities/` - Game entities (player, planet, resources)
-- `src/rendering/` - Rendering systems (camera, lighting, effects)
-- `src/ui/` - User interface components
-- `src/utils/` - Utility functions and constants
-- `src/physics/` - Physics systems (in development)
+We've created several documentation files to guide development:
 
-## How to Play
+- [Improvements Documentation](./IMPROVEMENTS.md) - Summary of all improvements
+- [TypeScript Progress](./TYPESCRIPT_PROGRESS.md) - Status of TypeScript migration
+- [TypeScript Conversion Plan](./TYPESCRIPT_CONVERSION_PLAN.md) - Plan for converting remaining files
+- [Code Organization](./CODE_ORGANIZATION.md) - Structure for better code organization
+- [Build Optimization](./BUILD_OPTIMIZATION.md) - Performance optimization recommendations
 
-1. Make sure you have Node.js installed on your system
-2. Double-click the `Luminor.command` file to start the game
-3. The game will open automatically in your default browser
-4. When you're done playing, simply close the terminal window
+## Development
 
-## Development Status
+### Prerequisites
 
-This project is currently in active development. Features include:
-- Procedurally generated spherical world
-- Dynamic lighting system
-- Resource collection mechanics
-- Smooth player controls
-- Enhanced terrain with texturing
+- Node.js (v14+)
+- npm
 
-## Future Plans
+### Installation
 
-- Physics-based player movement
-- Advanced particle effects
-- Level progression system
-- Sound effects and music
+```bash
+# Install dependencies
+npm install
+```
+
+### Running the Application
+
+```bash
+# Start development server
+npm run start
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+### Development Tools
+
+```bash
+# Run ESLint
+npm run lint
+
+# Fix ESLint issues
+npm run lint:fix
+
+# TypeScript type checking
+npm run typecheck
+
+# Convert JavaScript files to TypeScript
+npm run convert-to-ts
+
+# List JavaScript files to convert
+npm run convert-to-ts:list
+```
 
 ## License
 
-This project is open source and available under the MIT License.
-
-## Concept
-
-Luminor takes the classic snake mechanic into a unique 3D environment - a procedurally generated spherical world. Players navigate the planet's surface, collecting glowing energy to grow longer.
-
-A fixed light source (the sun) illuminates one portion of the planet, creating a distinct light/dark dichotomy that influences gameplay.
-
----
-
-*Code written by a mixture of AI (2025)* 
+[MIT](LICENSE) 

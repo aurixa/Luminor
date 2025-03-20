@@ -5,13 +5,22 @@
  */
 
 import * as THREE from 'three';
-import { PLANET_CONFIG, TERRAIN_CONFIG } from '../utils/constants.js';
-import { getCraterInfluence } from './craterGeneration.js';
+import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
+import { PLANET_CONFIG, TERRAIN_CONFIG } from '../utils/constants';
+import { getCraterInfluence, Crater } from './craterGeneration';
+
+interface PlanetGeometry {
+    geometry: THREE.BufferGeometry;
+    positions: THREE.Float32BufferAttribute;
+}
 
 /**
  * Generate the planet geometry with terrain features
+ * @param {SimplexNoise} noise - The noise generator
+ * @param {Crater[]} craters - Array of craters to apply
+ * @returns {PlanetGeometry} Object containing the geometry and positions
  */
-export function generatePlanetGeometry(noise, craters) {
+export function generatePlanetGeometry(noise: SimplexNoise, craters: Crater[]): PlanetGeometry {
     // Create basic sphere geometry
     const geometry = new THREE.SphereGeometry(
         PLANET_CONFIG.RADIUS, 
@@ -20,7 +29,7 @@ export function generatePlanetGeometry(noise, craters) {
     );
     
     // Get position attribute for manipulation
-    const positions = geometry.attributes.position;
+    const positions = geometry.attributes.position as THREE.Float32BufferAttribute;
     
     // Apply terrain features to each vertex
     for (let i = 0; i < positions.count; i++) {
@@ -61,8 +70,10 @@ export function generatePlanetGeometry(noise, craters) {
 
 /**
  * Generate texture coordinates for the planet
+ * @param {THREE.BufferGeometry} geometry - The planet geometry
+ * @param {THREE.Float32BufferAttribute} positions - The position attribute
  */
-function generateTextureCoordinates(geometry, positions) {
+function generateTextureCoordinates(geometry: THREE.BufferGeometry, positions: THREE.Float32BufferAttribute): void {
     const uvs = new Float32Array(positions.count * 2);
     
     for (let i = 0; i < positions.count; i++) {
@@ -87,13 +98,18 @@ function generateTextureCoordinates(geometry, positions) {
     }
     
     // Add UV attribute to geometry
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 }
 
 /**
  * Calculate terrain noise at a given position
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ * @param {number} z - Z coordinate
+ * @param {SimplexNoise} noise - The noise generator
+ * @returns {number} The terrain noise value
  */
-export function getTerrainNoise(x, y, z, noise) {
+export function getTerrainNoise(x: number, y: number, z: number, noise: SimplexNoise): number {
     // Apply multiple octaves of noise with different frequencies and influences
     let totalNoise = 0;
     
@@ -123,8 +139,14 @@ export function getTerrainNoise(x, y, z, noise) {
 
 /**
  * Calculate octave noise at a given position and frequency
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ * @param {number} z - Z coordinate
+ * @param {number} frequency - The noise frequency
+ * @param {SimplexNoise} noise - The noise generator
+ * @returns {number} The octave noise value
  */
-function getOctaveNoise(x, y, z, frequency, noise) {
+function getOctaveNoise(x: number, y: number, z: number, frequency: number, noise: SimplexNoise): number {
     // Basic 3D simplex noise
     const noiseValue = noise.noise3d(
         x * frequency, 
@@ -138,8 +160,12 @@ function getOctaveNoise(x, y, z, frequency, noise) {
 
 /**
  * Helper function to smooth step a value between edge0 and edge1
+ * @param {number} edge0 - Lower edge of the transition
+ * @param {number} edge1 - Upper edge of the transition
+ * @param {number} x - The value to smooth step
+ * @returns {number} The smoothed value
  */
-export function smoothstep(edge0, edge1, x) {
+export function smoothstep(edge0: number, edge1: number, x: number): number {
     const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
     return t * t * (3 - 2 * t);
 } 

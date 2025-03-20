@@ -1,8 +1,8 @@
 /**
  * Luminor
- * Player module - redirects to new modular structure
+ * UI module - redirects to consolidated UI module
  * Code written by a mixture of AI (2025)
  */
 
 // Import from new location to maintain backward compatibility
-export { setupPlayer } from './player/playerCore.js'; 
+export { setupUI } from './ui/interface'; 

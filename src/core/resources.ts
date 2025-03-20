@@ -1,25 +1,29 @@
 /**
  * Luminor
+ * Resource management and collection system
  * Code written by a mixture of AI (2025)
  */
 
 import * as THREE from 'three';
-import { RESOURCE_CONFIG } from './utils/constants.js';
+import { RESOURCE_CONFIG } from '../utils/constants';
+import { Resource, ResourceManager, Player, Planet } from '../types';
+import { createGlowingMaterial } from '../utils/materials';
 
 /**
  * Setup collectible resources around the planet
- * @param {THREE.Scene} scene - The Three.js scene
- * @param {Object} planet - The planet object
- * @returns {Object} The resources object with properties and methods
+ * @param scene - The Three.js scene
+ * @param planet - The planet object
+ * @returns The resources manager object
  */
-export function setupResources(scene, planet) {
+export function setupResources(scene: THREE.Scene, planet: Planet): ResourceManager {
     // Arrays to track resources
-    const resources = [];
-    const collectedResources = [];
+    const resources: Resource[] = [];
+    const collectedResourcesList: Resource[] = [];
+    let collectedResources = 0;
     let totalCollected = 0;
     
     // Track existing positions to prevent clustering
-    const existingPositions = [];
+    const existingPositions: THREE.Vector3[] = [];
     
     // Try to create resources with minimum spacing
     let attemptsRemaining = RESOURCE_CONFIG.COUNT * 3; // Allow multiple attempts per resource
@@ -158,14 +162,25 @@ export function setupResources(scene, planet) {
         totalCollected,
         
         // Set visibility of all resources
-        setVisible: function(visible) {
+        setVisible: function(visible: boolean): void {
             for (const resource of resources) {
                 resource.mesh.visible = visible;
             }
         },
         
+        // Remove a specific resource
+        remove: function(resource: Resource): void {
+            const index = resources.indexOf(resource);
+            if (index !== -1) {
+                resources.splice(index, 1);
+                collectedResourcesList.push(resource);
+                collectedResources++;
+                totalCollected++;
+            }
+        },
+        
         // Update resources (animations, etc.)
-        update: function(player, deltaTime) {
+        update: function(player: Player, deltaTime: number): void {
             // Update respawn timer
             respawnTimer += deltaTime;
             
@@ -235,123 +250,65 @@ export function setupResources(scene, planet) {
                     resource.mesh.position.copy(newPosition);
                 }
             }
-            
-            // Check for collisions with player
-            for (let i = resources.length - 1; i >= 0; i--) {
-                const resource = resources[i];
-                
-                // Distance check
-                if (player && player.getHeadPosition) {
-                    const headPos = player.getHeadPosition();
-                    const distance = headPos.distanceTo(resource.position);
-                    
-                    // Collect if close enough
-                    if (distance < RESOURCE_CONFIG.COLLECTION_DISTANCE) {
-                        // Hide mesh
-                        resource.mesh.visible = false;
-                        
-                        // Increment counter
-                        totalCollected++;
-                        
-                        // IMPORTANT: Log collection clearly
-                        console.log(`*** RESOURCE COLLECTED ***`);
-                        console.log(`Resource at: X:${resource.position.x.toFixed(2)}, Y:${resource.position.y.toFixed(2)}, Z:${resource.position.z.toFixed(2)}`);
-                        console.log(`Player at: X:${headPos.x.toFixed(2)}, Y:${headPos.y.toFixed(2)}, Z:${headPos.z.toFixed(2)}`);
-                        
-                        // Add growth to player
-                        if (player && player.grow) {
-                            console.log(`*** GROWING PLAYER ***`);
-                            try {
-                                player.grow(1);
-                                console.log(`Player grew! New length: ${player.getSegmentCount()}`);
-                            } catch (error) {
-                                console.error(`Error growing player: ${error.message}`);
-                            }
-                        } else {
-                            console.error(`Cannot grow player - player.grow is not available`);
-                        }
-                        
-                        // Move to collected array after growing the player
-                        collectedResources.push(resource);
-                        resources.splice(i, 1);
-                    }
-                }
-            }
         },
         
         // Check for collisions with player
-        checkCollisions: function(player) {
-            let collectedCount = 0;
-            const playerPosition = player.getHeadPosition();
+        checkCollisions: function(player: Player): void {
+            const playerPos = player.getPosition();
+            const collisionRadius = RESOURCE_CONFIG.COLLISION_RADIUS;
             
             for (const resource of resources) {
                 if (!resource.collected && 
-                    resource.position.distanceTo(playerPosition) < RESOURCE_CONFIG.COLLECTION_DISTANCE) {
-                    
+                    resource.position.distanceTo(playerPos) < collisionRadius) {
                     // Mark as collected
                     resource.collected = true;
-                    
-                    // Hide the mesh
                     resource.mesh.visible = false;
                     
-                    // Count collection
-                    collectedCount++;
+                    // Update counters
+                    collectedResources++;
+                    totalCollected++;
                 }
             }
-            
-            return collectedCount;
         },
         
-        // Remove resources from scene
-        remove: function() {
+        // Dispose of resources
+        dispose: function(scene: THREE.Scene): void {
             for (const resource of resources) {
                 scene.remove(resource.mesh);
                 resource.mesh.geometry.dispose();
-                resource.mesh.material.dispose();
+                if (Array.isArray(resource.mesh.material)) {
+                    resource.mesh.material.forEach(m => m.dispose());
+                } else {
+                    resource.mesh.material.dispose();
+                }
             }
             resources.length = 0;
-        },
-        
-        getCollectedCount: () => totalCollected
+            collectedResourcesList.length = 0;
+        }
     };
 }
 
 /**
- * Create geometry for resources
- * @returns {THREE.BufferGeometry} The created geometry
+ * Create the geometry for a resource
+ * @private
  */
-function createResourceGeometry() {
-    // Complex shape - combination of shapes
-    const baseGeometry = new THREE.OctahedronGeometry(RESOURCE_CONFIG.SIZE, 1);
+function createResourceGeometry(): THREE.BufferGeometry {
+    // Create a more interesting shape than a simple sphere
+    const geometry = new THREE.OctahedronGeometry(RESOURCE_CONFIG.SIZE, 1);
     
-    // Add some noise to the vertices for a more crystalline look
-    const positions = baseGeometry.attributes.position.array;
+    // Add some random variation to vertices
+    const positionAttribute = geometry.getAttribute('position');
+    const positions = positionAttribute.array;
+    
     for (let i = 0; i < positions.length; i += 3) {
-        const noise = (Math.random() - 0.5) * 0.3;
-        positions[i] += noise;
-        positions[i + 1] += noise;
-        positions[i + 2] += noise;
+        const offset = (Math.random() - 0.5) * 0.2;
+        positions[i] *= 1 + offset;
+        positions[i + 1] *= 1 + offset;
+        positions[i + 2] *= 1 + offset;
     }
     
-    // Update the geometry
-    baseGeometry.computeVertexNormals();
+    // Update normals
+    geometry.computeVertexNormals();
     
-    return baseGeometry;
-}
-
-/**
- * Create glowing material for resources
- * @param {number} color - The color of the resource
- * @param {number} intensity - The glow intensity
- * @returns {THREE.Material} The created material
- */
-function createGlowingMaterial(color, intensity) {
-    return new THREE.MeshPhongMaterial({
-        color: color,
-        emissive: color,
-        emissiveIntensity: intensity,
-        shininess: 100,
-        transparent: true,
-        opacity: 0.9
-    });
+    return geometry;
 } 

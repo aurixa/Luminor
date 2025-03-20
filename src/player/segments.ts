@@ -5,16 +5,35 @@
  */
 
 import * as THREE from 'three';
-import { PLAYER_CONFIG } from '../utils/constants.js';
-import { createGlowingMaterial } from '../utils/materials.js';
+import { PLAYER_CONFIG } from '../utils/constants';
+import { createGlowingMaterial } from '../utils/materials';
+import { Planet } from '../types';
+
+interface Segment {
+    mesh: THREE.Mesh<THREE.SphereGeometry, THREE.Material>;
+    isHead: boolean;
+    index: number;
+    position?: THREE.Vector3;
+    direction?: THREE.Vector3;
+    hoverPhase?: number;
+}
+
+interface SegmentsSystem {
+    segments: Segment[];
+    updateSegments: (deltaTime: number) => void;
+    growTail: (count: number) => void;
+    getCount: () => number;
+    checkCollisions: () => boolean;
+    dispose: (scene: THREE.Scene) => void;
+}
 
 /**
  * Setup the segments system for the player
  */
-export function setupSegments(scene, planet, headMesh) {
+export function setupSegments(scene: THREE.Scene, planet: Planet, headMesh: THREE.Mesh<THREE.SphereGeometry, THREE.Material>): SegmentsSystem {
     // Store segments as simple objects with mesh and target index
     // Each segment follows a specific position in the path
-    const segments = [];
+    const segments: Segment[] = [];
     
     // Add the head as the first segment
     segments.push({
@@ -24,7 +43,7 @@ export function setupSegments(scene, planet, headMesh) {
     });
     
     // Path array stores positions the head has traveled through
-    const path = [];
+    const path: THREE.Vector3[] = [];
     const MAX_PATH_LENGTH = 200; // Store a large path to ensure smooth following
     
     // Add initial position
@@ -38,7 +57,7 @@ export function setupSegments(scene, planet, headMesh) {
     /**
      * Update all segments to follow the path
      */
-    function updateSegments(deltaTime) {
+    function updateSegments(deltaTime: number): void {
         // First update the path with the head's current position
         const currentHeadPos = segments[0].mesh.position.clone();
         path.unshift(currentHeadPos);
@@ -83,7 +102,7 @@ export function setupSegments(scene, planet, headMesh) {
     /**
      * Add segments to the tail
      */
-    function growTail(count) {
+    function growTail(count: number): void {
         console.log(`Growing tail by ${count} segments`);
         
         for (let i = 0; i < count; i++) {
@@ -94,14 +113,14 @@ export function setupSegments(scene, planet, headMesh) {
     /**
      * Add a single new segment
      */
-    function addSegment() {
+    function addSegment(): void {
         // Create new segment geometry
         const segmentGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
         const segmentMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY * 0.8);
         const segmentMesh = new THREE.Mesh(segmentGeometry, segmentMaterial);
         
         // Get position for the new segment from the path
-        let position;
+        let position: THREE.Vector3;
         
         if (path.length > 0 && segments.length > 0) {
             // Position at the end of the current path
@@ -143,7 +162,7 @@ export function setupSegments(scene, planet, headMesh) {
     /**
      * Check collisions between head and segments
      */
-    function checkCollisions() {
+    function checkCollisions(): boolean {
         // Disable collisions for now
         return false;
     }
@@ -151,13 +170,21 @@ export function setupSegments(scene, planet, headMesh) {
     /**
      * Remove all segments from the scene
      */
-    function dispose(scene) {
+    function dispose(scene: THREE.Scene): void {
         // Skip the head (index 0) as it's handled by playerCore.js
         for (let i = 1; i < segments.length; i++) {
             const segment = segments[i];
             scene.remove(segment.mesh);
-            segment.mesh.geometry.dispose();
-            segment.mesh.material.dispose();
+            if (segment.mesh.geometry) {
+                segment.mesh.geometry.dispose();
+            }
+            if (segment.mesh.material) {
+                if (Array.isArray(segment.mesh.material)) {
+                    segment.mesh.material.forEach(m => m.dispose());
+                } else {
+                    segment.mesh.material.dispose();
+                }
+            }
         }
         
         // Clear the arrays
@@ -177,4 +204,4 @@ export function setupSegments(scene, planet, headMesh) {
         checkCollisions,
         dispose
     };
-}
+} 

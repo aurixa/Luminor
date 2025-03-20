@@ -5,15 +5,16 @@
  */
 
 import * as THREE from 'three';
-import { PLAYER_CONFIG } from '../utils/constants.js';
-import { createGlowingMaterial } from '../utils/materials.js';
-import { setupSegments } from './segments.js';
-import { createAlignmentIndicators } from './playerEffects.js';
+import { PLAYER_CONFIG } from '../utils/constants';
+import { createGlowingMaterial } from '../utils/materials';
+import { setupSegments } from './segments';
+import { createAlignmentIndicators, createTrailEffect } from './playerEffects';
+import { Player, Planet, InputKeys } from '../types';
 
 /**
  * Setup player and return player object
  */
-export function setupPlayer(scene, planet, camera, keys) {
+export function setupPlayer(scene: THREE.Scene, planet: Planet, _camera: THREE.PerspectiveCamera, keys: InputKeys): Player {
     // Create player head
     const headGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
     const headMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY);
@@ -38,33 +39,49 @@ export function setupPlayer(scene, planet, camera, keys) {
     // Setup segments system
     const segmentsSystem = setupSegments(scene, planet, headMesh);
     
+    // Setup trail system
+    const trailSystem = createTrailEffect(scene, segmentsSystem.segments);
+    
     // Make sure head segment has access to direction for proper tail following
     if (segmentsSystem.segments.length > 0) {
         segmentsSystem.segments[0].direction = currentDirection.clone();
     }
     
     // Public methods for the player
-    const player = {
-        // Core player properties
+    const player: Player = {
         mesh: headMesh,
         segments: segmentsSystem.segments,
-        position: headMesh.position,
-        direction: currentDirection,
-        
-        // Get player state
-        getHeadPosition: () => headMesh.position.clone(),
-        getHeadMesh: () => headMesh,
-        getHeadDirection: () => currentDirection.clone(),
+        updateSegments: segmentsSystem.updateSegments,
+        growTail: segmentsSystem.growTail,
+        getCount: segmentsSystem.getCount,
+        checkCollisions: segmentsSystem.checkCollisions,
+        trail: trailSystem,
+        dispose: (scene: THREE.Scene) => {
+            // Remove head
+            scene.remove(headMesh);
+            headMesh.geometry.dispose();
+            headMesh.material.dispose();
+            
+            // Remove segments
+            segmentsSystem.dispose(scene);
+            
+            // Remove debug visuals
+            if (PLAYER_CONFIG.DEBUG_ALIGNMENT) {
+                scene.remove(surfaceNormalLine);
+                scene.remove(directionLine);
+                scene.remove(rightLine);
+                
+                surfaceNormalLine.geometry.dispose();
+                directionLine.geometry.dispose();
+                rightLine.geometry.dispose();
+            }
+        },
+        getPosition: () => headMesh.position.clone(),
+        getDirection: () => currentDirection.clone(),
+        grow: (count: number) => segmentsSystem.growTail(count),
         getSegmentCount: () => segmentsSystem.getCount(),
-        
-        // Modify player
-        grow: (count) => segmentsSystem.growTail(count),
-        
-        // Game state
-        checkCollision: () => segmentsSystem.checkCollisions(),
-        
-        // Update function called by the game loop
-        update: (deltaTime) => {
+        getHeadPosition: () => headMesh.position.clone(),
+        update: (deltaTime: number) => {
             if (!isAlive) return;
             
             const oldPosition = headMesh.position.clone();
@@ -152,28 +169,6 @@ export function setupPlayer(scene, planet, camera, keys) {
             
             // Update segments to follow the head
             segmentsSystem.updateSegments(deltaTime);
-        },
-        
-        // Cleanup function to remove the player from the scene
-        dispose: (scene) => {
-            // Remove head
-            scene.remove(headMesh);
-            headMesh.geometry.dispose();
-            headMesh.material.dispose();
-            
-            // Remove segments
-            segmentsSystem.dispose(scene);
-            
-            // Remove debug visuals
-            if (PLAYER_CONFIG.DEBUG_ALIGNMENT) {
-                scene.remove(surfaceNormalLine);
-                scene.remove(directionLine);
-                scene.remove(rightLine);
-                
-                surfaceNormalLine.geometry.dispose();
-                directionLine.geometry.dispose();
-                rightLine.geometry.dispose();
-            }
         }
     };
     

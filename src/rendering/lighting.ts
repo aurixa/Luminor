@@ -5,12 +5,20 @@
  */
 
 import * as THREE from 'three';
-import { LIGHTING_CONFIG } from '../utils/constants.js';
+import { LIGHTING_CONFIG } from '../utils/constants';
+
+interface LightingSetup {
+    ambientLight: THREE.AmbientLight;
+    sunLight: THREE.DirectionalLight;
+    fillLight: THREE.DirectionalLight;
+}
 
 /**
  * Setup all lighting for the scene
+ * @param {THREE.Scene} scene - The Three.js scene to add lights to
+ * @returns {LightingSetup} Object containing all created lights
  */
-export function setupLighting(scene) {
+export function setupLighting(scene: THREE.Scene): LightingSetup {
     // Set scene background color
     scene.background = new THREE.Color(LIGHTING_CONFIG.BACKGROUND_COLOR);
     
@@ -18,11 +26,11 @@ export function setupLighting(scene) {
     const ambientLight = createAmbientLight();
     scene.add(ambientLight);
     
-    // Add main directional light (sun)
+    // Create sun light
     const sunLight = createSunLight();
     scene.add(sunLight);
     
-    // Add fill light from opposite side
+    // Create fill light
     const fillLight = createFillLight();
     scene.add(fillLight);
     
@@ -35,8 +43,9 @@ export function setupLighting(scene) {
 
 /**
  * Create ambient light
+ * @returns {THREE.AmbientLight} The created ambient light
  */
-function createAmbientLight() {
+function createAmbientLight(): THREE.AmbientLight {
     const light = new THREE.AmbientLight(
         LIGHTING_CONFIG.AMBIENT_LIGHT.COLOR, 
         LIGHTING_CONFIG.AMBIENT_LIGHT.INTENSITY
@@ -46,11 +55,11 @@ function createAmbientLight() {
 }
 
 /**
- * Create directional sun light
+ * Create the main sun light
  */
-function createSunLight() {
+function createSunLight(): THREE.DirectionalLight {
     const light = new THREE.DirectionalLight(
-        LIGHTING_CONFIG.SUN_LIGHT.COLOR, 
+        LIGHTING_CONFIG.SUN_LIGHT.COLOR,
         LIGHTING_CONFIG.SUN_LIGHT.INTENSITY
     );
     
@@ -63,12 +72,13 @@ function createSunLight() {
     
     // Configure shadows
     light.castShadow = true;
-    light.shadow.mapSize.width = 4096;
-    light.shadow.mapSize.height = 4096;
-    light.shadow.camera.near = 0.5;
-    light.shadow.camera.far = 1000;
+    light.shadow.mapSize.width = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_MAP_SIZE;
+    light.shadow.mapSize.height = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_MAP_SIZE;
     
-    // Set shadow camera size
+    // Configure shadow camera
+    light.shadow.camera.near = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_NEAR;
+    light.shadow.camera.far = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_FAR;
+    
     const shadowSize = LIGHTING_CONFIG.SUN_LIGHT.SHADOW_SIZE;
     light.shadow.camera.left = -shadowSize;
     light.shadow.camera.right = shadowSize;
@@ -79,9 +89,9 @@ function createSunLight() {
 }
 
 /**
- * Create fill light (opposite to sun)
+ * Create the fill light for softer shadows
  */
-function createFillLight() {
+function createFillLight(): THREE.DirectionalLight {
     const light = new THREE.DirectionalLight(
         LIGHTING_CONFIG.FILL_LIGHT.COLOR,
         LIGHTING_CONFIG.FILL_LIGHT.INTENSITY
@@ -93,6 +103,9 @@ function createFillLight() {
         LIGHTING_CONFIG.FILL_LIGHT.POSITION.y,
         LIGHTING_CONFIG.FILL_LIGHT.POSITION.z
     );
+    
+    // Fill light doesn't cast shadows
+    light.castShadow = false;
     
     return light;
 } 

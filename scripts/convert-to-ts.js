@@ -63,16 +63,60 @@ function convertJsToTs(filePath) {
   }
 }
 
-// Convert a specific file or all files
-if (process.argv.length > 2) {
-  // Convert a specific file
-  const specificFile = path.resolve(process.argv[2]);
+// List all JavaScript files without converting them
+function listJsFiles() {
+  const jsFiles = findJsFiles(sourceDir);
+  console.log(`\nFound ${jsFiles.length} JavaScript files:`);
   
-  if (fs.existsSync(specificFile) && specificFile.endsWith('.js')) {
-    convertJsToTs(specificFile);
-  } else {
-    console.error(`File not found or not a JavaScript file: ${specificFile}`);
-  }
+  // Group files by directory for better readability
+  const filesByDir = {};
+  jsFiles.forEach(file => {
+    const relPath = path.relative(path.resolve(__dirname, '..'), file);
+    const dir = path.dirname(relPath);
+    if (!filesByDir[dir]) {
+      filesByDir[dir] = [];
+    }
+    filesByDir[dir].push(path.basename(file));
+  });
+  
+  // Print files grouped by directory
+  Object.keys(filesByDir).sort().forEach(dir => {
+    console.log(`\n📂 ${dir}:`);
+    filesByDir[dir].sort().forEach(file => {
+      console.log(`  - ${file}`);
+    });
+  });
+  
+  console.log('\nTo convert all files, run: npm run convert-to-ts');
+  console.log('To convert a specific file, run: npm run convert-to-ts [path-to-file]');
+}
+
+// Check for --list flag
+if (process.argv.includes('--list')) {
+  listJsFiles();
+} 
+// Convert specific files if multiple paths are provided
+else if (process.argv.length > 2 && !process.argv[2].startsWith('--')) {
+  // Get all file paths from arguments (skip the first two which are node and script path)
+  const filePaths = process.argv.slice(2);
+  
+  console.log(`Converting ${filePaths.length} file(s)...`);
+  
+  let converted = 0;
+  filePaths.forEach(filePath => {
+    const resolvedPath = path.resolve(filePath);
+    
+    if (fs.existsSync(resolvedPath) && resolvedPath.endsWith('.js')) {
+      if (convertJsToTs(resolvedPath)) {
+        converted++;
+      }
+    } else {
+      console.error(`File not found or not a JavaScript file: ${resolvedPath}`);
+    }
+  });
+  
+  console.log(`\nConverted ${converted} of ${filePaths.length} files.`);
+  console.log('Please review the TypeScript files and add type definitions as needed.');
 } else {
   // Convert all files in the src directory
   console.log('Finding all JavaScript files...');
