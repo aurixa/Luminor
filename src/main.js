@@ -7,8 +7,7 @@ import * as THREE from 'three';
 import { createPlanet, PLANET_RADIUS } from './planet.js';
 import { setupResources } from './resources.js';
 import { setupUI } from './ui.js';
-import { createHoverPlayer } from './physics/hoverPlayer.js';
-import { applyTerrainPatches } from './physics/terrainjob.js';
+import { createBikePlayer } from './bikePlayer.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 // Main game state
@@ -78,8 +77,10 @@ stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild(stats.dom);
 
 // Initialize game elements
-let hoverPlayer = null;
+let bikePlayer = null;
 let resources = null;
+let cameraHelper = null;
+const clock = new THREE.Clock();
 
 // Set up UI
 let ui;
@@ -150,8 +151,6 @@ function createStarField() {
     const stars = new THREE.Points(starsGeometry, starsMaterial);
     stars.frustumCulled = false; // Prevent stars from disappearing
     scene.add(stars);
-    
-    console.log("Star field created with", starCount, "stars");
 }
 
 /**
@@ -161,36 +160,24 @@ function createStarTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 32;
     canvas.height = 32;
-    
     const context = canvas.getContext('2d');
-    const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+    
+    // Create a radial gradient for a circular star
+    const gradient = context.createRadialGradient(
+        16, 16, 0,   // Inner circle x, y, radius
+        16, 16, 16   // Outer circle x, y, radius
+    );
+    
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(0.5, 'rgba(200, 200, 200, 0.5)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
     
     context.fillStyle = gradient;
     context.fillRect(0, 0, 32, 32);
     
-    const texture = new THREE.Texture(canvas);
-    texture.needsUpdate = true;
+    const texture = new THREE.CanvasTexture(canvas);
     return texture;
 }
-
-// Turn off the camera helper by default - it can be confusing
-const cameraHelper = new THREE.CameraHelper(camera);
-cameraHelper.visible = false;  // Hide by default
-scene.add(cameraHelper);
-
-// Add axes helper to visualize the coordinate system
-const axesHelper = new THREE.AxesHelper(50);
-scene.add(axesHelper);
-
-// Debug sphere at origin for reference
-const debugSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(5, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
-);
-scene.add(debugSphere);
 
 /**
  * Main animation loop
@@ -211,16 +198,17 @@ function animate() {
         // Calculate delta time (capped to prevent large jumps after pausing)
         const deltaTime = Math.min(0.016, clock.getDelta());
         
-        // Update hover player
-        if (hoverPlayer) {
-            // Call hoverPlayer update - guarantee a reasonable update frequency
-            const fixedTimestep = 0.016; // 60hz
-            hoverPlayer.update(fixedTimestep);
+        // Update bike player
+        if (bikePlayer) {
+            bikePlayer.update(deltaTime);
+            
+            // Update camera to follow player
+            updateCamera(deltaTime);
         }
         
         // Update resources
         if (resources) {
-            resources.update(hoverPlayer ? hoverPlayer.getPosition() : null);
+            resources.update(bikePlayer ? bikePlayer.getPosition() : null);
         }
         
         // Update debug helpers
@@ -238,27 +226,74 @@ function animate() {
     stats.end();
 }
 
-// Ensure the camera is in a valid position
-function ensureCameraIsValid() {
-    // Make sure camera is not too close to the origin
-    const distanceFromOrigin = camera.position.length();
-    if (distanceFromOrigin < PLANET_RADIUS * 0.9) {
-        console.log("Camera too close to origin, repositioning");
-        const direction = camera.position.clone().normalize();
-        camera.position.copy(direction.multiplyScalar(PLANET_RADIUS + 100));
-        camera.lookAt(0, 0, 0);
+/**
+ * Camera settings for following the player
+ */
+const CAMERA_CONFIG = {
+    distance: 100,        // Distance behind player
+    height: 50,           // Height above player
+    lookAheadDistance: 50, // Look ahead of player
+    lerpFactor: 0.07      // Smooth camera movement
+};
+
+/**
+ * Update camera position to follow the player
+ */
+function updateCamera(deltaTime) {
+    if (!bikePlayer) return;
+    
+    try {
+        // Get player position and orientation
+        const playerPos = bikePlayer.getPosition();
+        const playerForward = bikePlayer.getForwardDirection();
+        const playerUp = bikePlayer.getUpDirection();
+        
+        // Calculate target camera position
+        const targetCameraPos = new THREE.Vector3()
+            .copy(playerPos)                                        // Start at player position
+            .add(playerUp.clone().multiplyScalar(CAMERA_CONFIG.height))    // Move up
+            .sub(playerForward.clone().multiplyScalar(CAMERA_CONFIG.distance)); // Move back
+            
+        // Calculate look-at position (ahead of player)
+        const lookAtPos = new THREE.Vector3()
+            .copy(playerPos)
+            .add(playerForward.clone().multiplyScalar(CAMERA_CONFIG.lookAheadDistance));
+        
+        // Smoothly move camera toward target position
+        camera.position.lerp(targetCameraPos, CAMERA_CONFIG.lerpFactor);
+        
+        // Look at the player's position plus a bit ahead
+        camera.lookAt(lookAtPos);
+        
+        // Ensure camera up aligns with player up
+        camera.up.copy(playerUp);
+        
+    } catch (error) {
+        console.error("Error updating camera:", error);
     }
 }
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// Clock for delta time calculation
-const clock = new THREE.Clock();
+/**
+ * Ensure camera is not inside the planet
+ */
+function ensureCameraIsValid() {
+    try {
+        // Calculate distance from planet center
+        const distanceFromCenter = camera.position.length();
+        
+        // Minimum safe distance is the planet radius plus some margin
+        const minimumSafeDistance = PLANET_RADIUS * 1.05;
+        
+        if (distanceFromCenter < minimumSafeDistance) {
+            // Camera is too close to or inside the planet
+            // Move it outward in the same direction
+            const direction = camera.position.clone().normalize();
+            camera.position.copy(direction.multiplyScalar(minimumSafeDistance));
+        }
+    } catch (error) {
+        console.error("Error validating camera position:", error);
+    }
+}
 
 /**
  * Start the game
@@ -272,10 +307,10 @@ function startGame() {
         // Reset but don't try to remove loading screen again
         
         // Dispose old player if exists
-        if (hoverPlayer) {
+        if (bikePlayer) {
             console.log("Removing existing player");
-            hoverPlayer.dispose();
-            hoverPlayer = null;
+            bikePlayer.dispose();
+            bikePlayer = null;
         }
     } else {
         // Set game state to playing for the first time
@@ -305,13 +340,9 @@ function startGame() {
         ui.updateUI();
     }
     
-    // Create hover player
-    console.log("Creating new hover player");
-    hoverPlayer = createHoverPlayer(scene, planet, camera);
-    
-    // Apply terrain patches to make the player follow the actual terrain
-    console.log("Applying terrain following patches...");
-    applyTerrainPatches(game, hoverPlayer.physicsWorld, hoverPlayer.controller, planet);
+    // Create bike player
+    console.log("Creating new bike player");
+    bikePlayer = createBikePlayer(scene, planet, camera);
     
     // Reset resources
     if (!resources) {
@@ -331,44 +362,31 @@ function startGame() {
  * End the game
  */
 function endGame() {
-    console.log("Game over!");
+    console.log("Ending game");
     
-    // Update game state
-    gameState.isPlaying = false;
     gameState.gameHasEnded = true;
     
-    // Update UI with new state
-    if (ui && ui.updateUI) {
-        ui.updateUI();
+    // Update UI to show game over state
+    if (ui && ui.showGameOver) {
+        ui.showGameOver(gameState.playerLength);
     }
     
-    // Update score display
-    const finalScore = document.getElementById('final-score');
-    if (finalScore) {
-        finalScore.textContent = gameState.playerLength;
+    // Stop player
+    if (bikePlayer) {
+        // No need to dispose, just freeze updates
     }
 }
 
 /**
- * Setup interactive controls for terrain parameters
+ * Setup terrain panel controls
  */
 function setupTerrainPanelControls() {
-    const terrainPanel = document.getElementById('terrain-panel');
-    if (!terrainPanel) return;
-    
-    // Toggle button for terrain panel
-    const terrainToggle = document.getElementById('terrain-toggle');
-    if (terrainToggle) {
-        terrainToggle.addEventListener('click', () => {
-            terrainPanel.classList.toggle('expanded');
-        });
-    }
-    
-    // Close button for terrain panel
-    const closeButton = document.getElementById('terrain-panel-close');
-    if (closeButton) {
-        closeButton.addEventListener('click', () => {
-            terrainPanel.classList.remove('expanded');
-        });
-    }
-} 	
+    // This could be used for terrain adjustment if needed
+}
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}); 	

@@ -8,7 +8,7 @@ import * as THREE from 'three';
 
 // Camera configuration constants
 export const CAMERA_CONFIG = {
-    DISTANCE: 60,         // Distance from the player
+    DISTANCE: 40,         // Distance from the player
     HEIGHT: 60,           // Height above the ground
     SMOOTHNESS: 0.08,     // Camera movement smoothing factor
     FORWARD_OFFSET: 20,   // How far ahead of the player to look
