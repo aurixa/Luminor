@@ -38,6 +38,9 @@ let gameLoop = null;
 let starField = null;
 let ui = null;
 
+// Game callbacks
+let gameCallbacks = null;
+
 /**
  * Initialize the game
  * The main entry point from index.js
@@ -65,11 +68,8 @@ export function initializeGame() {
     // Create planet
     planet = createPlanet(scene);
     
-    // Setup UI
-    ui = setupUI(gameState, startGame);
-    
     // Setup control callbacks
-    const callbacks = {
+    gameCallbacks = {
         onSpacePressed: handleSpacePressed,
         onEscapePressed: handleEscapePressed,
         onPausePressed: handlePausePressed,
@@ -77,11 +77,17 @@ export function initializeGame() {
         onMenuPressed: handleMenuPressed,
         onResourceCollected: handleResourceCollected,
         onScoreUpdated: handleScoreUpdated,
-        onGameOver: handleGameOver
+        onGameOver: handleGameOver,
+        updateCamera: (camera, player, planet, deltaTime) => {
+            updateCameraPosition(camera, player, planet, deltaTime);
+        }
     };
     
     // Setup controls
-    controls = setupControls(callbacks);
+    controls = setupControls(gameCallbacks);
+    
+    // Setup UI
+    ui = setupUI(gameState, startGame);
 }
 
 /**
@@ -113,12 +119,7 @@ function startGame() {
         gameLoop = initGameLoop(
             gameState, scene, camera, renderer, 
             player, planet, resources, stats, 
-            {
-                ...callbacks,
-                updateCamera: (camera, player, planet, deltaTime) => {
-                    updateCameraPosition(camera, player, planet, deltaTime);
-                }
-            }
+            gameCallbacks
         );
     }
     

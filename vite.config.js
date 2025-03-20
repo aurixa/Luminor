@@ -1,3 +1,9 @@
+/**
+ * Luminor
+ * Vite configuration
+ * Code written by a mixture of AI (2025)
+ */
+
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -11,11 +17,14 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     emptyOutDir: true,
-    sourcemap: false,
+    sourcemap: true,
     minify: true,
-    target: 'es2015',
+    target: 'es2020',
   },
   optimizeDeps: {
     include: ['three']
+  },
+  resolve: {
+    extensions: ['.ts', '.js']
   }
 }); 
