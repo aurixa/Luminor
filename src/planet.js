@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
 
 // Planet configuration
-const PLANET_RADIUS = 800; // Base planet radius
+export const PLANET_RADIUS = 800; // Base planet radius
 
 // Terrain parameters - these can be adjusted for testing
 const TERRAIN_PARAMS = {
@@ -77,72 +77,148 @@ const TERRAIN_PARAMS = {
  * @returns {Object} The planet object with properties and methods
  */
 export function createPlanet(scene) {
+    console.log("Creating planet with radius:", PLANET_RADIUS);
+    
     // Create a simplex noise generator for terrain
     const noise = new SimplexNoise();
     
-    // Create a sphere geometry with high resolution
-    const geometry = new THREE.SphereGeometry(PLANET_RADIUS, 196, 196); // Increased resolution
+    // Create a sphere geometry with lower resolution for better performance
+    const geometry = new THREE.SphereGeometry(PLANET_RADIUS, 96, 96);
     
     // Generate craters and store them for later use
     const craters = generateCraters(TERRAIN_PARAMS.craters.count);
     
-    // Apply terrain displacement to the geometry
-    applyTerrainDisplacement(geometry, noise, craters);
+    // Apply terrain displacement to the geometry with reduced intensity
+    applyTerrainDisplacement(geometry, noise, craters, 0.3); // Reduced displacement for stability
     
-    // Create the planet material
-    const material = createPlanetMaterial();
+    // Create a simpler planet material for better visibility
+    const material = new THREE.MeshPhongMaterial({
+        color: 0x8a7152,       // Brownish color for more natural terrain
+        shininess: 5,          // Low shininess for better diffuse lighting
+        flatShading: false,    // Smooth shading for better appearance
+        specular: 0x222222,    // Slight specular highlight
+        emissive: 0x443828     // Slight self-illumination to ensure visibility
+    });
     
     // Create the planet mesh
     const planetMesh = new THREE.Mesh(geometry, material);
+    console.log("Planet mesh created:", planetMesh);
+    
+    // Ensure the planet is visible
+    planetMesh.visible = true;
+    planetMesh.castShadow = true;
+    planetMesh.receiveShadow = true;
+    planetMesh.frustumCulled = false; // Prevent frustum culling
+    
+    // Add to scene
     scene.add(planetMesh);
     
     // Return the planet object
-    return {
+    const planetObj = {
         mesh: planetMesh,
         radius: PLANET_RADIUS,
-        craters: craters,
-        
-        // Get the nearest point on the planet's surface from a given point
-        getNearestPointOnSurface: function(point) {
-            // Get the direction from the center to the point
-            const direction = point.clone().normalize();
-            
-            // Get elevation at this point on the planet
-            const elevation = getElevationAtDirection(direction, noise, craters);
-            
-            // Calculate the final radius including terrain displacement
-            const finalRadius = PLANET_RADIUS + elevation;
-            
-            // Return the point on the surface
-            return direction.multiplyScalar(finalRadius);
-        },
-        
-        // Update method (for future animations if needed)
-        update: function(deltaTime) {
-            // No animations needed for now
-        },
-        
-        // Method to update terrain parameters (could be connected to UI controls)
-        updateTerrainParams: function(newParams) {
-            // Copy new parameters to TERRAIN_PARAMS
-            for (const key in newParams) {
-                if (typeof newParams[key] === 'object' && newParams[key] !== null) {
-                    // Deep merge for nested objects
-                    for (const subKey in newParams[key]) {
-                        TERRAIN_PARAMS[key][subKey] = newParams[key][subKey];
-                    }
-                } else {
-                    TERRAIN_PARAMS[key] = newParams[key];
+        // Access planet terrain height 
+        getNearestPointOnSurface: function(direction) {
+            try {
+                // Safety check for valid input
+                if (!direction || isNaN(direction.x) || isNaN(direction.y) || isNaN(direction.z)) {
+                    console.warn("Invalid point for getNearestPointOnSurface:", direction);
+                    return new THREE.Vector3(PLANET_RADIUS, 0, 0); // Return default point as fallback
                 }
+                
+                // Get the base spherical position at planet radius
+                const normalizedDir = direction.clone().normalize();
+                
+                // Get the actual terrain height at this direction
+                const terrainHeight = getElevationAtDirection(normalizedDir, noise, craters);
+                
+                // Add terrain height to the base radius
+                const totalRadius = PLANET_RADIUS + terrainHeight;
+                
+                // Return the point on the terrain surface
+                return normalizedDir.multiplyScalar(totalRadius);
+            } catch (error) {
+                console.error("Error in getNearestPointOnSurface:", error);
+                // Return a reasonable default in case of error
+                return new THREE.Vector3(PLANET_RADIUS, 0, 0);
             }
-            
-            // Regenerate the planet with new parameters
-            // (This would need a complete rebuild of the geometry)
-            console.log("Terrain parameters updated:", TERRAIN_PARAMS);
-            
-            // Note: A full implementation would clear and rebuild the mesh here
+        },
+        
+        // Get the normal vector at a point on the terrain surface
+        getNormalAtPoint: function(point) {
+            try {
+                // Safety check for valid input
+                if (!point || isNaN(point.x) || isNaN(point.y) || isNaN(point.z)) {
+                    console.warn("Invalid point for getNormalAtPoint:", point);
+                    // Return default up direction as fallback
+                    return new THREE.Vector3(0, 1, 0);
+                }
+                
+                // Get direction from center to point
+                const direction = point.clone().normalize();
+                
+                // Use central differences to compute the normal
+                const epsilon = 0.01; // Small displacement for derivative calculation
+                
+                // Create tangent vectors perpendicular to direction
+                let tangentU = new THREE.Vector3(1, 0, 0);
+                if (Math.abs(direction.dot(tangentU)) > 0.9) {
+                    // If direction is close to x-axis, use y-axis instead
+                    tangentU = new THREE.Vector3(0, 1, 0);
+                }
+                
+                // Get first tangent vector perpendicular to direction
+                tangentU.crossVectors(direction, tangentU).normalize();
+                
+                // Get second tangent vector perpendicular to both
+                const tangentV = new THREE.Vector3().crossVectors(direction, tangentU).normalize();
+                
+                // Calculate elevation at displaced points to get the gradient
+                const dirU1 = direction.clone().add(tangentU.clone().multiplyScalar(epsilon)).normalize();
+                const dirU2 = direction.clone().add(tangentU.clone().multiplyScalar(-epsilon)).normalize();
+                const dirV1 = direction.clone().add(tangentV.clone().multiplyScalar(epsilon)).normalize();
+                const dirV2 = direction.clone().add(tangentV.clone().multiplyScalar(-epsilon)).normalize();
+                
+                // Get heights at each of these points
+                const heightCenter = getElevationAtDirection(direction, noise, craters);
+                const heightU1 = getElevationAtDirection(dirU1, noise, craters);
+                const heightU2 = getElevationAtDirection(dirU2, noise, craters);
+                const heightV1 = getElevationAtDirection(dirV1, noise, craters);
+                const heightV2 = getElevationAtDirection(dirV2, noise, craters);
+                
+                // Calculate partial derivatives using central differences
+                const dU = (heightU1 - heightU2) / (2 * epsilon);
+                const dV = (heightV1 - heightV2) / (2 * epsilon);
+                
+                // Create normal vector using cross product
+                const normalU = tangentU.clone().multiplyScalar(dU);
+                const normalV = tangentV.clone().multiplyScalar(dV);
+                
+                // Calculate the actual normal (perpendicular to both gradients)
+                const normal = new THREE.Vector3().crossVectors(normalV, normalU).normalize();
+                
+                // Make sure the normal points outward
+                if (normal.dot(direction) < 0) {
+                    normal.negate();
+                }
+                
+                return normal;
+            } catch (error) {
+                console.error("Error in getNormalAtPoint:", error);
+                // Return direction from center in case of error (like a sphere normal)
+                return point.clone().normalize();
+            }
+        },
+        
+        // Get the terrain elevation at a specific point or direction
+        getElevationAtPoint: function(point) {
+            const direction = point.clone().normalize();
+            return getElevationAtDirection(direction, noise, craters);
         }
     };
+    
+    console.log("Returning planet object:", planetObj);
+    return planetObj;
 }
 
 /**
@@ -187,114 +263,47 @@ function generateCraters(count) {
 /**
  * Apply terrain displacement to the sphere geometry
  */
-function applyTerrainDisplacement(geometry, noise, craters) {
+function applyTerrainDisplacement(geometry, noise, craters, intensity = 1.0) {
     // Get the vertices from the geometry
     const positions = geometry.attributes.position;
+    const count = positions.count;
     
-    // Create a new array for storing colors
-    const colorArray = new Float32Array(positions.count * 3);
-    const colorAttribute = new THREE.BufferAttribute(colorArray, 3);
-    
-    // Create arrays for texture coordinates
-    const uvs = new Float32Array(positions.count * 2);
-    
-    // Calculate elevation range for color mapping
+    // Track displacement range for info
     let minElevation = Infinity;
     let maxElevation = -Infinity;
-    const elevations = [];
     
-    // First pass - calculate all elevations for normalization
-    for (let i = 0; i < positions.count; i++) {
+    // Process each vertex
+    for (let i = 0; i < count; i++) {
         // Get the vertex position
         const x = positions.getX(i);
         const y = positions.getY(i);
         const z = positions.getZ(i);
         
-        // Normalize to get the direction
+        // Calculate the direction from the center to this vertex
         const direction = new THREE.Vector3(x, y, z).normalize();
         
-        // Get elevation at this point
-        const elevation = getElevationAtDirection(direction, noise, craters);
-        elevations[i] = elevation;
+        // Prevent NaN issues
+        if (isNaN(direction.x) || isNaN(direction.y) || isNaN(direction.z)) {
+            continue;
+        }
         
-        // Track min/max elevation
+        // Get elevation at this direction
+        const elevation = getElevationAtDirection(direction, noise, craters);
+        
+        // Track min/max for statistics
         minElevation = Math.min(minElevation, elevation);
         maxElevation = Math.max(maxElevation, elevation);
         
-        // Calculate texture coordinates (spherical mapping)
-        // These will be used to apply the detailed texture
-        const phi = Math.atan2(direction.z, direction.x);
-        const theta = Math.asin(direction.y);
-        
-        uvs[i * 2] = (phi / (2 * Math.PI) + 0.5); // U: 0-1 based on longitude
-        uvs[i * 2 + 1] = (theta / Math.PI + 0.5);  // V: 0-1 based on latitude
-    }
-    
-    console.log(`Terrain height range: ${minElevation.toFixed(2)} to ${maxElevation.toFixed(2)} (${(maxElevation - minElevation).toFixed(2)} units)`);
-    
-    // Second pass - apply displacements and colors
-    for (let i = 0; i < positions.count; i++) {
-        // Get the vertex position
-        const x = positions.getX(i);
-        const y = positions.getY(i);
-        const z = positions.getZ(i);
-        
-        // Normalize to get the direction
-        const direction = new THREE.Vector3(x, y, z).normalize();
-        
-        // Get elevation and normalize it
-        const elevation = elevations[i];
-        const normalizedElevation = (elevation - minElevation) / (maxElevation - minElevation);
-        
-        // Apply displacement to the vertex
-        const displacedPosition = direction.multiplyScalar(PLANET_RADIUS + elevation);
+        // Apply displacement to the vertex, scaled by intensity
+        const displacedPosition = direction.multiplyScalar(PLANET_RADIUS + elevation * intensity);
         positions.setXYZ(i, displacedPosition.x, displacedPosition.y, displacedPosition.z);
-        
-        // Calculate slope for shading (steeper = darker)
-        const slopeShading = getSlopeShading(direction, noise, craters);
-        
-        // Apply color tinting based on elevation and slope
-        // We're using vertex colors to tint the texture
-        let r, g, b;
-        
-        if (normalizedElevation < 0.3) {
-            // Lower areas - slightly darker tint
-            r = 0.92 + slopeShading * 0.15;
-            g = 0.92 + slopeShading * 0.15;
-            b = 0.90 + slopeShading * 0.1;
-        } else if (normalizedElevation < 0.65) {
-            // Mid elevations - neutral tint
-            r = 1.0 + slopeShading * 0.15;
-            g = 1.0 + slopeShading * 0.15;
-            b = 0.98 + slopeShading * 0.1;
-        } else {
-            // Higher elevations - slightly lighter tint
-            r = 1.05 + slopeShading * 0.15;
-            g = 1.05 + slopeShading * 0.15;
-            b = 1.02 + slopeShading * 0.1;
-        }
-        
-        // Add some reddish tint to very steep areas (cliff faces)
-        if (slopeShading < -0.15) {
-            r += Math.abs(slopeShading) * 0.2;
-            g -= Math.abs(slopeShading) * 0.1;
-            b -= Math.abs(slopeShading) * 0.1;
-        }
-        
-        // Set final vertex colors (these will modulate the texture)
-        colorArray[i * 3] = Math.max(0, Math.min(1, r));
-        colorArray[i * 3 + 1] = Math.max(0, Math.min(1, g));
-        colorArray[i * 3 + 2] = Math.max(0, Math.min(1, b));
     }
     
-    // Add the color attribute to the geometry
-    geometry.setAttribute('color', colorAttribute);
-    
-    // Add the uv attribute for texturing
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    
-    // Calculate normals for proper lighting
+    // Update normals
     geometry.computeVertexNormals();
+    
+    // Log the displacement range
+    console.log(`Terrain height range: ${minElevation.toFixed(2)} to ${maxElevation.toFixed(2)} (${(maxElevation - minElevation).toFixed(2)} units)`);
 }
 
 /**
@@ -324,141 +333,177 @@ function getSlopeShading(direction, noise, craters) {
  * Get the terrain elevation at a specific direction from the planet center
  */
 function getElevationAtDirection(direction, noise, craters) {
+    // Safety check for invalid direction
+    if (!direction || isNaN(direction.x) || isNaN(direction.y) || isNaN(direction.z)) {
+        console.warn("Invalid direction for getElevationAtDirection");
+        return 0; // Return flat terrain in case of error
+    }
+    
     // Extract coordinates
     const { x, y, z } = direction;
     
-    // 1. Generate large-scale undulations (the main dramatic hills)
-    const largeScaleFreq = TERRAIN_PARAMS.largeScale.frequency;
-    let largeScaleNoise = noise.noise3d(
-        x * largeScaleFreq, 
-        y * largeScaleFreq, 
-        z * largeScaleFreq
-    );
-    
-    // Enhance large undulations with power curve for more dramatic terrain
-    // This creates more flat areas with steeper transitions between them
-    largeScaleNoise = Math.pow(Math.abs(largeScaleNoise), 0.8) * Math.sign(largeScaleNoise);
-    
-    // 2. Generate medium-scale terrain (hills and valleys)
-    const medScaleFreq = TERRAIN_PARAMS.mediumScale.frequency;
-    let medScaleNoise = noise.noise3d(
-        x * medScaleFreq, 
-        y * medScaleFreq, 
-        z * medScaleFreq
-    );
-    
-    // Enhance medium undulations with modified curve
-    medScaleNoise = Math.pow(Math.abs(medScaleNoise), 0.9) * Math.sign(medScaleNoise);
-    
-    // 3. Generate small-scale details using multiple noise octaves
-    let smallScaleNoise = 0;
-    let amplitude = 1.0;
-    let frequency = TERRAIN_PARAMS.smallScale.frequency;
-    let maxValue = 0;
-    
-    for (let i = 0; i < TERRAIN_PARAMS.smallScale.octaves; i++) {
-        const noiseValue = noise.noise3d(x * frequency, y * frequency, z * frequency);
-        smallScaleNoise += noiseValue * amplitude;
-        maxValue += amplitude;
-        
-        amplitude *= TERRAIN_PARAMS.smallScale.persistence;
-        frequency *= 2.0;
-    }
-    
-    // Normalize small-scale noise
-    smallScaleNoise = smallScaleNoise / maxValue;
-    
-    // 4. Generate ridge features with better shaping for motocross-style terrain
-    let ridgeNoise = 0;
-    if (TERRAIN_PARAMS.ridges.enabled) {
-        const ridgeFreq = TERRAIN_PARAMS.ridges.frequency;
-        // Get raw noise
-        const rawNoise = noise.noise3d(
-            x * ridgeFreq, 
-            y * ridgeFreq, 
-            z * ridgeFreq
+    try {
+        // 1. Generate large-scale undulations (the main dramatic hills)
+        const largeScaleFreq = TERRAIN_PARAMS.largeScale.frequency;
+        let largeScaleNoise = noise.noise3d(
+            x * largeScaleFreq, 
+            y * largeScaleFreq, 
+            z * largeScaleFreq
         );
         
-        // Transform noise to create ridges (1 - abs(noise))
-        const transformedNoise = 1.0 - Math.abs(rawNoise);
+        // Handle potential NaN from noise function
+        if (isNaN(largeScaleNoise)) {
+            console.warn("NaN detected in large scale noise");
+            largeScaleNoise = 0;
+        }
         
-        // Apply power function for sharper ridge definition
-        ridgeNoise = Math.pow(transformedNoise, TERRAIN_PARAMS.ridges.sharpness);
-    }
-    
-    // 5. Generate valleys with better definition
-    let valleyNoise = 0;
-    if (TERRAIN_PARAMS.valleys.enabled) {
-        const valleyFreq = TERRAIN_PARAMS.valleys.frequency;
-        // Get raw noise with offset to ensure different pattern from ridges
-        const rawNoise = noise.noise3d(
-            x * valleyFreq + 100, 
-            y * valleyFreq + 100,
-            z * valleyFreq + 100
+        // Enhance large undulations with power curve for more dramatic terrain
+        // This creates more flat areas with steeper transitions between them
+        largeScaleNoise = Math.pow(Math.abs(largeScaleNoise), 0.8) * Math.sign(largeScaleNoise);
+        
+        // 2. Generate medium-scale terrain (hills and valleys)
+        const medScaleFreq = TERRAIN_PARAMS.mediumScale.frequency;
+        let medScaleNoise = noise.noise3d(
+            x * medScaleFreq, 
+            y * medScaleFreq, 
+            z * medScaleFreq
         );
         
-        // Transform noise for better valley definition
-        // Using a technique that creates more flat valley bottoms
-        valleyNoise = Math.pow(Math.max(0, rawNoise), 1.2) * -TERRAIN_PARAMS.valleys.depth;
-    }
-    
-    // 6. Combine all noise layers with their influence factors
-    // Create more dramatic terrain reminiscent of Motocross Madness
-    let baseElevation = 
-        largeScaleNoise * TERRAIN_PARAMS.largeScale.influence + 
-        medScaleNoise * TERRAIN_PARAMS.mediumScale.influence + 
-        smallScaleNoise * TERRAIN_PARAMS.smallScale.influence;
-    
-    // Add ridge and valley effects
-    if (TERRAIN_PARAMS.ridges.enabled) {
-        baseElevation += ridgeNoise * TERRAIN_PARAMS.ridges.influence;
-    }
-    
-    if (TERRAIN_PARAMS.valleys.enabled) {
-        baseElevation += valleyNoise * TERRAIN_PARAMS.valleys.influence;
-    }
-    
-    // 7. Apply overall roughness
-    baseElevation *= TERRAIN_PARAMS.roughness;
-    
-    // 8. Apply more dramatic terrain shaping 
-    // This creates the characteristic look of motocross terrain with 
-    // more flat areas separated by steeper transitions
-    baseElevation = (baseElevation > 0) 
-        ? Math.pow(baseElevation, 0.7) 
-        : -Math.pow(Math.abs(baseElevation), 0.7);
-    
-    // 9. Scale to actual size
-    const scaledElevation = baseElevation * (PLANET_RADIUS * TERRAIN_PARAMS.heightScale);
-    
-    // 10. Apply smoothed craters (reduced influence for Motocross style)
-    let craterEffect = 0;
-    
-    for (const crater of craters) {
-        // Calculate distance from this point to crater center
-        const distToCrater = direction.distanceTo(crater.position);
+        // Handle potential NaN
+        if (isNaN(medScaleNoise)) {
+            console.warn("NaN detected in medium scale noise");
+            medScaleNoise = 0;
+        }
         
-        // If point is within crater influence radius
-        if (distToCrater < crater.size / PLANET_RADIUS) {
-            // Normalized distance (0 at center, 1 at rim)
-            const normalizedDist = distToCrater / (crater.size / PLANET_RADIUS);
+        // Enhance medium undulations with modified curve
+        medScaleNoise = Math.pow(Math.abs(medScaleNoise), 0.9) * Math.sign(medScaleNoise);
+        
+        // 3. Generate small-scale details using multiple noise octaves
+        let smallScaleNoise = 0;
+        let amplitude = 1.0;
+        let frequency = TERRAIN_PARAMS.smallScale.frequency;
+        let maxValue = 0;
+        
+        for (let i = 0; i < TERRAIN_PARAMS.smallScale.octaves; i++) {
+            const noiseValue = noise.noise3d(x * frequency, y * frequency, z * frequency);
             
-            // Calculate crater profile with smoother transitions
-            if (normalizedDist < 0.8) {
-                // Inside crater
-                const craterDepth = Math.pow(Math.cos(normalizedDist * Math.PI * 0.6), crater.falloff) * crater.depth;
-                craterEffect -= craterDepth;
-            } else if (normalizedDist < 1.0) {
-                // Crater rim
-                const rimFactor = (normalizedDist - 0.8) / 0.2; // 0 at inner rim, 1 at outer rim
-                const rimProfile = Math.sin(rimFactor * Math.PI);
-                craterEffect += rimProfile * crater.rimHeight;
+            // Handle potential NaN
+            if (!isNaN(noiseValue)) {
+                smallScaleNoise += noiseValue * amplitude;
+                maxValue += amplitude;
+            }
+            
+            amplitude *= TERRAIN_PARAMS.smallScale.persistence;
+            frequency *= 2.0;
+        }
+        
+        // Normalize small-scale noise (safely)
+        smallScaleNoise = maxValue > 0 ? smallScaleNoise / maxValue : 0;
+        
+        // 4. Generate ridge features with better shaping for motocross-style terrain
+        let ridgeNoise = 0;
+        if (TERRAIN_PARAMS.ridges.enabled) {
+            const ridgeFreq = TERRAIN_PARAMS.ridges.frequency;
+            // Get raw noise
+            const rawNoise = noise.noise3d(
+                x * ridgeFreq, 
+                y * ridgeFreq, 
+                z * ridgeFreq
+            );
+            
+            // Only proceed if we have valid noise
+            if (!isNaN(rawNoise)) {
+                // Transform noise to create ridges (1 - abs(noise))
+                const transformedNoise = 1.0 - Math.abs(rawNoise);
+                
+                // Apply power function for sharper ridge definition
+                ridgeNoise = Math.pow(transformedNoise, TERRAIN_PARAMS.ridges.sharpness);
             }
         }
+        
+        // 5. Generate valleys with better definition
+        let valleyNoise = 0;
+        if (TERRAIN_PARAMS.valleys.enabled) {
+            const valleyFreq = TERRAIN_PARAMS.valleys.frequency;
+            // Get raw noise with offset to ensure different pattern from ridges
+            const rawNoise = noise.noise3d(
+                x * valleyFreq + 100, 
+                y * valleyFreq + 100,
+                z * valleyFreq + 100
+            );
+            
+            // Only proceed if we have valid noise
+            if (!isNaN(rawNoise)) {
+                // Transform noise for better valley definition
+                // Using a technique that creates more flat valley bottoms
+                valleyNoise = Math.pow(Math.max(0, rawNoise), 1.2) * -TERRAIN_PARAMS.valleys.depth;
+            }
+        }
+        
+        // 6. Combine all noise layers with their influence factors
+        // Create more dramatic terrain reminiscent of Motocross Madness
+        let baseElevation = 
+            largeScaleNoise * TERRAIN_PARAMS.largeScale.influence + 
+            medScaleNoise * TERRAIN_PARAMS.mediumScale.influence + 
+            smallScaleNoise * TERRAIN_PARAMS.smallScale.influence;
+        
+        // Add ridge and valley effects
+        if (TERRAIN_PARAMS.ridges.enabled) {
+            baseElevation += ridgeNoise * TERRAIN_PARAMS.ridges.influence;
+        }
+        
+        if (TERRAIN_PARAMS.valleys.enabled) {
+            baseElevation += valleyNoise * TERRAIN_PARAMS.valleys.influence;
+        }
+        
+        // 7. Apply overall roughness
+        baseElevation *= TERRAIN_PARAMS.roughness;
+        
+        // 8. Apply more dramatic terrain shaping 
+        // This creates the characteristic look of motocross terrain with 
+        // more flat areas separated by steeper transitions
+        baseElevation = (baseElevation > 0) 
+            ? Math.pow(baseElevation, 0.7) 
+            : -Math.pow(Math.abs(baseElevation), 0.7);
+        
+        // 9. Scale to actual size
+        const scaledElevation = baseElevation * (PLANET_RADIUS * TERRAIN_PARAMS.heightScale);
+        
+        // 10. Apply smoothed craters (reduced influence for Motocross style)
+        let craterEffect = 0;
+        
+        for (const crater of craters) {
+            // Safety check for valid crater position
+            if (!crater.position || isNaN(crater.position.x)) continue;
+            
+            // Calculate distance from this point to crater center
+            const distToCrater = direction.distanceTo(crater.position);
+            
+            // If point is within crater influence radius and distance is valid
+            if (distToCrater < crater.size / PLANET_RADIUS && !isNaN(distToCrater)) {
+                // Normalized distance (0 at center, 1 at rim)
+                const normalizedDist = distToCrater / (crater.size / PLANET_RADIUS);
+                
+                // Calculate crater profile with smoother transitions
+                if (normalizedDist < 0.8) {
+                    // Inside crater
+                    const craterDepth = Math.pow(Math.cos(normalizedDist * Math.PI * 0.6), crater.falloff) * crater.depth;
+                    craterEffect -= craterDepth;
+                } else if (normalizedDist < 1.0) {
+                    // Crater rim
+                    const rimFactor = (normalizedDist - 0.8) / 0.2; // 0 at inner rim, 1 at outer rim
+                    const rimProfile = Math.sin(rimFactor * Math.PI);
+                    craterEffect += rimProfile * crater.rimHeight;
+                }
+            }
+        }
+        
+        // Combine base elevation with crater effect
+        return scaledElevation + craterEffect;
+    } catch (error) {
+        console.error("Error in getElevationAtDirection:", error);
+        return 0; // Return flat terrain in case of error
     }
-    
-    // Combine base elevation with crater effect
-    return scaledElevation + craterEffect;
 }
 
 /**

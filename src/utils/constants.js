@@ -83,6 +83,6 @@ export const RESOURCE_CONFIG = {
     COLOR: 0xffdd00,        // Resource color
     GLOW_INTENSITY: 1.5,    // Glow effect intensity
     ROTATION_SPEED: 0.01,   // Rotation animation speed
-    COLLECTION_DISTANCE: 5.0, // Distance for collection
+    COLLECTION_DISTANCE: 8.0, // Distance for collection (increased from 5.0)
     MIN_SPACING: 50,        // Minimum spacing between resources
 }; 
