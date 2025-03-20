@@ -20,7 +20,8 @@
     "ts:migrate-phase3": "./scripts/migrate-phase3.sh",
     "ts:migrate-phase4": "./scripts/migrate-phase4.sh",
     "ts:migrate-phase5": "./scripts/migrate-phase5.sh",
-    "ts:migrate-all": "npm run ts:migrate-phase1 && npm run ts:migrate-phase2 && npm run ts:migrate-phase3 && npm run ts:migrate-phase4 && npm run ts:migrate-phase5"
+    "ts:migrate-all": "npm run ts:migrate-phase1 && npm run ts:migrate-phase2 && npm run ts:migrate-phase3 && npm run ts:migrate-phase4 && npm run ts:migrate-phase5",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\""
   },
   "dependencies": {
     "eslint": "^9.22.0",
@@ -29,12 +30,15 @@
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@types/three": "^0.162.0",
-    "@typescript-eslint/eslint-plugin": "^7.7.1",
-    "@typescript-eslint/parser": "^7.7.1",
-    "eslint-plugin-import": "^2.29.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-import-resolver-typescript": "^4.2.2",
+    "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-promise": "^6.1.1",
     "globals": "^13.24.0",
-    "typescript": "^5.4.5",
+    "prettier": "^3.5.3",
+    "typescript": "^5.5.3",
     "vite": "^5.4.14"
   },
   "repository": {

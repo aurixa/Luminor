@@ -17,7 +17,7 @@ import { SceneSetup } from '../types';
 export function initializeScene(): SceneSetup {
   // Create scene
   const scene = new THREE.Scene();
-  
+
   // Create camera
   const camera = new THREE.PerspectiveCamera(
     CAMERA_CONFIG.FOV,
@@ -25,7 +25,7 @@ export function initializeScene(): SceneSetup {
     CAMERA_CONFIG.NEAR,
     CAMERA_CONFIG.FAR
   );
-  
+
   // Create renderer
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -33,10 +33,10 @@ export function initializeScene(): SceneSetup {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
-  
+
   // Setup resize handler
   setupResizeHandler(camera, renderer);
-  
+
   return { scene, camera, renderer };
 }
 
@@ -45,24 +45,24 @@ export function initializeScene(): SceneSetup {
  * @private
  */
 function setupResizeHandler(
-  camera: THREE.PerspectiveCamera, 
+  camera: THREE.PerspectiveCamera,
   renderer: THREE.WebGLRenderer
 ): () => void {
   const handleResize = (): void => {
     // Update camera aspect ratio
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    
+
     // Update renderer size
     renderer.setSize(window.innerWidth, window.innerHeight);
   };
-  
+
   // Set initial size
   handleResize();
-  
+
   // Add window resize listener
   window.addEventListener('resize', handleResize);
-  
+
   return handleResize;
 }
 
@@ -73,22 +73,22 @@ function setupResizeHandler(
  * @returns Updated scene and camera
  */
 export function setupGameScene(
-  scene: THREE.Scene, 
+  scene: THREE.Scene,
   camera: THREE.PerspectiveCamera
 ): { scene: THREE.Scene; camera: THREE.PerspectiveCamera } {
   // Setup lighting (includes setting background color)
   setupLighting(scene);
-  
+
   // Create starfield
   createStarfield(scene);
-  
+
   // Set initial camera position
   camera.position.set(
-    CAMERA_CONFIG.INITIAL_POSITION.x, 
-    CAMERA_CONFIG.INITIAL_POSITION.y, 
+    CAMERA_CONFIG.INITIAL_POSITION.x,
+    CAMERA_CONFIG.INITIAL_POSITION.y,
     CAMERA_CONFIG.INITIAL_POSITION.z
   );
   camera.lookAt(0, 0, 0);
-  
+
   return { scene, camera };
-} 
+}

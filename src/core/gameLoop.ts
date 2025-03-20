@@ -27,31 +27,41 @@ let deltaTime = 0;
  * @returns Game loop controller
  */
 export function initGameLoop(
-    gameState: GameState,
-    scene: THREE.Scene,
-    camera: THREE.PerspectiveCamera,
-    renderer: THREE.WebGLRenderer,
-    player: Player,
-    planet: Planet,
-    resources: ResourceManager,
-    stats: Stats,
-    callbacks: GameCallbacks
+  gameState: GameState,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  renderer: THREE.WebGLRenderer,
+  player: Player,
+  planet: Planet,
+  resources: ResourceManager,
+  stats: Stats,
+  callbacks: GameCallbacks
 ): GameLoop {
-    // Store references
-    const gameLoop: GameLoop = {
-        start: () => {
-            startGameLoop(gameState, scene, camera, renderer, player, planet, resources, stats, callbacks);
-        },
-        stop: stopGameLoop,
-        pause: () => pauseGame(gameState),
-        resume: () => resumeGame(gameState),
-        dispose: () => {
-            stopGameLoop();
-            // Additional cleanup if needed
-        }
-    };
-    
-    return gameLoop;
+  // Store references
+  const gameLoop: GameLoop = {
+    start: () => {
+      startGameLoop(
+        gameState,
+        scene,
+        camera,
+        renderer,
+        player,
+        planet,
+        resources,
+        stats,
+        callbacks
+      );
+    },
+    stop: stopGameLoop,
+    pause: () => pauseGame(gameState),
+    resume: () => resumeGame(gameState),
+    dispose: () => {
+      stopGameLoop();
+      // Additional cleanup if needed
+    }
+  };
+
+  return gameLoop;
 }
 
 /**
@@ -59,20 +69,20 @@ export function initGameLoop(
  * @private
  */
 function startGameLoop(
-    gameState: GameState,
-    scene: THREE.Scene,
-    camera: THREE.PerspectiveCamera,
-    renderer: THREE.WebGLRenderer,
-    player: Player,
-    planet: Planet,
-    resources: ResourceManager,
-    stats: Stats,
-    callbacks: GameCallbacks
+  gameState: GameState,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  renderer: THREE.WebGLRenderer,
+  player: Player,
+  planet: Planet,
+  resources: ResourceManager,
+  stats: Stats,
+  callbacks: GameCallbacks
 ): void {
-    lastTime = performance.now();
-    animationFrame = requestAnimationFrame((time) => 
-        animate(time, gameState, scene, camera, renderer, player, planet, resources, stats, callbacks)
-    );
+  lastTime = performance.now();
+  animationFrame = requestAnimationFrame((time) =>
+    animate(time, gameState, scene, camera, renderer, player, planet, resources, stats, callbacks)
+  );
 }
 
 /**
@@ -80,10 +90,10 @@ function startGameLoop(
  * @private
  */
 function stopGameLoop(): void {
-    if (animationFrame !== null) {
-        cancelAnimationFrame(animationFrame);
-        animationFrame = null;
-    }
+  if (animationFrame !== null) {
+    cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
 }
 
 /**
@@ -91,7 +101,7 @@ function stopGameLoop(): void {
  * @private
  */
 function pauseGame(gameState: GameState): void {
-    gameState.isPaused = true;
+  gameState.isPaused = true;
 }
 
 /**
@@ -99,7 +109,7 @@ function pauseGame(gameState: GameState): void {
  * @private
  */
 function resumeGame(gameState: GameState): void {
-    gameState.isPaused = false;
+  gameState.isPaused = false;
 }
 
 /**
@@ -107,65 +117,76 @@ function resumeGame(gameState: GameState): void {
  * @private
  */
 function animate(
-    time: number,
-    gameState: GameState,
-    scene: THREE.Scene,
-    camera: THREE.PerspectiveCamera,
-    renderer: THREE.WebGLRenderer,
-    player: Player,
-    planet: Planet,
-    resources: ResourceManager,
-    stats: Stats,
-    callbacks: GameCallbacks
+  time: number,
+  gameState: GameState,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  renderer: THREE.WebGLRenderer,
+  player: Player,
+  planet: Planet,
+  resources: ResourceManager,
+  stats: Stats,
+  callbacks: GameCallbacks
 ): void {
-    // Start performance measurement
-    stats.begin();
-    
-    // Calculate delta time
-    deltaTime = (time - lastTime) / 1000;
-    lastTime = time;
-    
-    // Cap delta time to prevent large jumps after tab switch, etc.
-    if (deltaTime > 0.1) deltaTime = 0.1;
-    
-    // Skip updates if paused, but still render
-    if (gameState.isPlaying && !gameState.isPaused && !gameState.gameHasEnded) {
-        // Update player
-        if (player) {
-            player.update(deltaTime);
-            
-            // Check for collisions with resources
-            if (resources) {
-                resources.checkCollisions(player);
-            }
-        }
-        
-        // Update resources
-        if (resources) {
-            resources.update(player, deltaTime);
-        }
-        
-        // Update game state and score
-        if (callbacks.onScoreUpdated) {
-            callbacks.onScoreUpdated(gameState.score);
-        }
-        
-        // Update camera position
-        if (callbacks.updateCamera) {
-            callbacks.updateCamera();
-        }
+  // Start performance measurement
+  stats.begin();
+
+  // Calculate delta time
+  deltaTime = (time - lastTime) / 1000;
+  lastTime = time;
+
+  // Cap delta time to prevent large jumps after tab switch, etc.
+  if (deltaTime > 0.1) deltaTime = 0.1;
+
+  // Skip updates if paused, but still render
+  if (gameState.isPlaying && !gameState.isPaused && !gameState.gameHasEnded) {
+    // Update player
+    if (player) {
+      player.update(deltaTime);
+
+      // Check for collisions with resources
+      if (resources) {
+        resources.checkCollisions(player);
+      }
     }
-    
-    // Render the scene
-    renderer.render(scene, camera);
-    
-    // End performance measurement
-    stats.end();
-    
-    // Continue animation loop if not stopped
-    if (animationFrame !== null) {
-        animationFrame = requestAnimationFrame((nextTime) => 
-            animate(nextTime, gameState, scene, camera, renderer, player, planet, resources, stats, callbacks)
-        );
+
+    // Update resources
+    if (resources) {
+      resources.update(player, deltaTime);
     }
-} 
+
+    // Update game state and score
+    if (callbacks.onScoreUpdated) {
+      callbacks.onScoreUpdated(gameState.score);
+    }
+
+    // Update camera position
+    if (callbacks.updateCamera) {
+      callbacks.updateCamera(camera);
+    }
+  }
+
+  // Render the scene
+  renderer.render(scene, camera);
+
+  // End performance measurement
+  stats.end();
+
+  // Continue animation loop if not stopped
+  if (animationFrame !== null) {
+    animationFrame = requestAnimationFrame((nextTime) =>
+      animate(
+        nextTime,
+        gameState,
+        scene,
+        camera,
+        renderer,
+        player,
+        planet,
+        resources,
+        stats,
+        callbacks
+      )
+    );
+  }
+}

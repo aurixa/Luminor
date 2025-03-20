@@ -11,4 +11,4 @@ import { initializeGame } from './core/game';
 document.addEventListener('DOMContentLoaded', (): void => {
   console.log('Initializing Luminor...');
   initializeGame();
-}); 
+});

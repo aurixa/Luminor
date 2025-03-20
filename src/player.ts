@@ -5,4 +5,4 @@
  */
 
 // Import from new location to maintain backward compatibility
-export { setupPlayer } from './player/playerCore'; 
+export { setupPlayer } from './player/playerCore';

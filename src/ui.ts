@@ -5,4 +5,4 @@
  */
 
 // Import from new location to maintain backward compatibility
-export { setupUI } from './ui/interface'; 
+export { setupUI } from './ui/interface';

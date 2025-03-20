@@ -13,46 +13,53 @@ module.exports = {
   },
   extends: [
     'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
     'plugin:import/recommended',
-    'plugin:promise/recommended'
+    'plugin:import/typescript',
+    'plugin:promise/recommended',
+    'prettier' // This should be last to override other style rules
   ],
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2020,
-    sourceType: 'module'
+    sourceType: 'module',
+    project: './tsconfig.json'
   },
-  plugins: [
-    'import',
-    'promise'
-  ],
+  plugins: ['@typescript-eslint', 'import', 'promise'],
   rules: {
     // Error prevention
-    'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     'no-var': 'error',
     'prefer-const': 'warn',
-    
+
     // Code style
-    'semi': ['error', 'always'],
-    'quotes': ['warn', 'single', { avoidEscape: true }],
-    'indent': ['warn', 2],
-    'comma-dangle': ['warn', 'never'],
-    'arrow-parens': ['warn', 'as-needed'],
-    
+    'indent': ['error', 2],
+    '@typescript-eslint/indent': 'off', // Let the base indent rule handle it
+    'semi': 'off',
+    'quotes': 'off',
+    'comma-dangle': 'off',
+    'arrow-parens': ['error', 'as-needed'],
+
     // Best practices
     'complexity': ['warn', 15],
     'max-depth': ['warn', 4],
-    'max-lines-per-function': ['warn', { max: 100, skipBlankLines: true, skipComments: true }],
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
-    
-    // Import rules
-    'import/order': ['warn', {
-      'groups': ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
-      'newlines-between': 'always'
-    }]
+    'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true }],
+    'no-console': ['warn', { allow: ['warn', 'error'] }]
   },
   overrides: [
-    // Files that are known to have console logs for debugging
+    // Files that are allowed to use console.log
     {
-      files: ['src/core/gameLoop.js'],
+      files: [
+        'src/core/gameLoop.ts',
+        'src/core/game.ts',
+        'src/core/resources.ts',
+        'src/player/playerCore.ts',
+        'src/player/segments.ts',
+        'src/ui/interface.ts',
+        'src/planet/craterGeneration.ts',
+        'src/planet/textureGeneration.ts'
+      ],
       rules: {
         'no-console': 'off'
       }
@@ -60,9 +67,12 @@ module.exports = {
   ],
   settings: {
     'import/resolver': {
-      'node': {
-        'extensions': ['.js']
+      typescript: {
+        alwaysTryTypes: true
+      },
+      node: {
+        extensions: ['.ts', '.tsx', '.js', '.jsx']
       }
     }
   }
-}; 
+};
