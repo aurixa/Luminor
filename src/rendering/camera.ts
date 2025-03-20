@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 import { CAMERA_CONFIG } from '../utils/constants';
-import { Player, Planet } from '../types';
+import { Player } from '../types';
 
 /**
  * Setup the camera for the game
@@ -46,12 +46,7 @@ function handleResize(camera: THREE.PerspectiveCamera): void {
 /**
  * Update camera position to follow player
  */
-export function updateCameraPosition(
-  camera: THREE.PerspectiveCamera,
-  player: Player,
-  _planet: Planet,
-  _deltaTime: number
-): void {
+export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Player): void {
   // Get player position and direction
   const playerPos = player.getPosition();
   const playerDir = player.getDirection();
