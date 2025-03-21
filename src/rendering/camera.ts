@@ -66,12 +66,21 @@ export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Pl
   const terrainAngle = Math.acos(
     Math.max(0, Math.min(1, upVector.dot(new THREE.Vector3(0, 1, 0))))
   );
-  const heightAdjustment = Math.cos(terrainAngle) * CAMERA_CONFIG.HEIGHT_OFFSET;
 
-  // Adjust camera distance based on terrain angle
-  const distanceAdjustment = CAMERA_CONFIG.FOLLOW_DISTANCE * (1 + Math.sin(terrainAngle) * 0.2);
+  // Calculate angle between player direction and upward direction
+  const movementAngle = Math.acos(Math.max(0, Math.min(1, playerDir.dot(upVector))));
 
-  // Calculate ideal camera position (where we want the camera to be)
+  // Base height is higher to avoid low angles
+  const baseHeight = CAMERA_CONFIG.HEIGHT_OFFSET * 1.5;
+
+  // Add extra height when moving downhill
+  const downhillFactor = Math.max(0, Math.sin(movementAngle) * 0.5);
+  const heightAdjustment = baseHeight * (1 + downhillFactor + Math.sin(terrainAngle) * 0.3);
+
+  // Keep consistent distance but add slight increase on slopes
+  const distanceAdjustment = CAMERA_CONFIG.FOLLOW_DISTANCE * (1 + Math.sin(terrainAngle) * 0.15);
+
+  // Calculate ideal camera position
   const idealOffset = new THREE.Vector3();
   idealOffset.copy(forward).multiplyScalar(-distanceAdjustment);
   idealOffset.add(upVector.multiplyScalar(heightAdjustment));
@@ -88,11 +97,11 @@ export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Pl
     // Terrain is blocking view, adjust camera position
     const intersection = intersects[0];
     const distanceToIntersection = intersection.distance;
-    const minDistance = CAMERA_CONFIG.FOLLOW_DISTANCE * 0.3; // Minimum 30% of normal distance
+    const minDistance = CAMERA_CONFIG.FOLLOW_DISTANCE * 0.4;
 
     if (distanceToIntersection < CAMERA_CONFIG.FOLLOW_DISTANCE) {
       // Move camera closer to player, but maintain relative angle
-      const adjustedDistance = Math.max(minDistance, distanceToIntersection * 0.8);
+      const adjustedDistance = Math.max(minDistance, distanceToIntersection * 0.9);
       targetPosition = playerPos
         .clone()
         .add(idealOffset.normalize().multiplyScalar(adjustedDistance));
@@ -100,32 +109,31 @@ export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Pl
       // Ensure minimum height from surface
       const surfacePoint = planet.getNearestPointOnSurface(targetPosition);
       const surfaceNormal = surfacePoint.clone().normalize();
-      const minHeightOffset = PLANET_CONFIG.RADIUS * 0.05; // 5% of planet radius
+      const minHeightOffset = PLANET_CONFIG.RADIUS * 0.08;
       targetPosition.copy(surfacePoint).add(surfaceNormal.multiplyScalar(minHeightOffset));
     }
   }
 
-  // Apply different smoothing rates for position and rotation
-  const positionLerpFactor = 0.2; // Fast position following
-  const rotationLerpFactor = 0.05; // Slower rotation following
+  // Split camera movement into vertical and horizontal components
+  const currentPos = camera.position.clone();
+  const targetVertical = targetPosition.clone().projectOnVector(upVector);
+  const currentVertical = currentPos.clone().projectOnVector(upVector);
+  const targetHorizontal = targetPosition.clone().sub(targetVertical);
+  const currentHorizontal = currentPos.clone().sub(currentVertical);
 
-  // Calculate current camera direction relative to player
-  const currentCameraDir = camera.position.clone().sub(playerPos).normalize();
+  // Apply different smoothing factors
+  const verticalSmoothFactor = 0.3; // Faster vertical follow
+  const horizontalSmoothFactor = 0.05; // Slower horizontal follow
 
-  // Interpolate camera direction
-  const newCameraDir = new THREE.Vector3();
-  newCameraDir
-    .copy(currentCameraDir)
-    .lerp(targetPosition.clone().sub(playerPos).normalize(), rotationLerpFactor);
+  // Interpolate separately
+  const newVertical = currentVertical.lerp(targetVertical, verticalSmoothFactor);
+  const newHorizontal = currentHorizontal.lerp(targetHorizontal, horizontalSmoothFactor);
 
-  // Apply position smoothing while maintaining the interpolated direction
-  const smoothedPosition = playerPos
-    .clone()
-    .add(newCameraDir.multiplyScalar(targetPosition.clone().sub(playerPos).length()));
-  camera.position.lerp(smoothedPosition, positionLerpFactor);
+  // Combine the movements
+  camera.position.copy(newHorizontal.add(newVertical));
 
   // Look at a point slightly ahead of the player
-  const lookAheadDistance = Math.min(30, distanceAdjustment * 0.2);
+  const lookAheadDistance = Math.min(30, distanceAdjustment * 0.3);
   const lookAtOffset = forward.multiplyScalar(lookAheadDistance);
   const lookAtPoint = playerPos.clone().add(lookAtOffset);
   camera.lookAt(lookAtPoint);

@@ -6,7 +6,6 @@
 
 import * as THREE from 'three';
 import { PLAYER_CONFIG } from '../utils/constants';
-import { createGlowingMaterial } from '../utils/materials';
 import { setupSegments } from './segments';
 import { createAlignmentIndicators, createTrailEffect } from './playerEffects';
 import { Player, Planet, InputKeys } from '../types';
@@ -20,9 +19,20 @@ export function setupPlayer(
   _camera: THREE.PerspectiveCamera,
   keys: InputKeys | null = null
 ): Player {
-  // Create player head
-  const headGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
-  const headMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY);
+  // Create player head - a simple cube
+  const headGeometry = new THREE.BoxGeometry(
+    PLAYER_CONFIG.SEGMENT_SIZE,
+    PLAYER_CONFIG.SEGMENT_SIZE,
+    PLAYER_CONFIG.SEGMENT_SIZE
+  );
+
+  // Use a standard MeshLambertMaterial with no special effects
+  const headMaterial = new THREE.MeshLambertMaterial({
+    color: 0x00ffaa,
+    emissive: 0x00aa77,
+    emissiveIntensity: 0.5
+  });
+
   const headMesh = new THREE.Mesh(headGeometry, headMaterial);
 
   // Set initial position on the planet surface
@@ -35,13 +45,20 @@ export function setupPlayer(
 
   console.log('Spawning player at position:', initialPosition);
   headMesh.position.copy(initialPosition);
-  scene.add(headMesh);
 
-  // Initial direction should be tangent to the planet surface
+  // Initial movement direction - tangent to the planet surface
   let currentDirection = new THREE.Vector3(1, 0, 0).normalize(); // Start moving east
   const up = initialPosition.clone().normalize();
+
+  // Ensure direction is perpendicular to up vector (tangent to surface)
   currentDirection = new THREE.Vector3().crossVectors(up, currentDirection).normalize();
 
+  // Set initial orientation
+  orientPlayerToSurface(headMesh, surfaceNormal, currentDirection);
+
+  scene.add(headMesh);
+
+  // Player state
   let isAlive = true;
 
   // Setup alignment indicators (debug visuals)
@@ -53,12 +70,41 @@ export function setupPlayer(
   // Setup trail system
   const trailSystem = createTrailEffect(scene, segmentsSystem.segments);
 
-  // Make sure head segment has access to direction for proper tail following
-  if (segmentsSystem.segments.length > 0) {
-    segmentsSystem.segments[0].direction = currentDirection.clone();
+  /**
+   * Orient player mesh to face the direction of travel while conforming to the surface
+   */
+  function orientPlayerToSurface(
+    mesh: THREE.Mesh,
+    surfaceNormal: THREE.Vector3,
+    movementDirection: THREE.Vector3
+  ): void {
+    // The up vector points away from the planet center
+    const up = surfaceNormal.clone().normalize();
+
+    // Project movement direction onto the tangent plane
+    const forward = movementDirection
+      .clone()
+      .sub(up.clone().multiplyScalar(up.dot(movementDirection)))
+      .normalize();
+
+    // Get the right vector to complete the orthogonal basis
+    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+
+    // Create rotation matrix from these three orthogonal vectors
+    const rotMatrix = new THREE.Matrix4().makeBasis(
+      right, // X axis (right)
+      up, // Y axis (up)
+      forward // Z axis (forward)
+    );
+
+    // Apply the rotation without any scaling
+    mesh.quaternion.setFromRotationMatrix(rotMatrix);
+
+    // Ensure no scaling is applied that might deform the mesh
+    mesh.scale.set(1, 1, 1);
   }
 
-  // Public methods for the player
+  // Return the player interface
   const player = {
     mesh: headMesh,
     segments: segmentsSystem.segments,
@@ -71,7 +117,9 @@ export function setupPlayer(
       // Remove head
       scene.remove(headMesh);
       headMesh.geometry.dispose();
-      headMesh.material.dispose();
+      if (headMesh.material instanceof THREE.Material) {
+        headMesh.material.dispose();
+      }
 
       // Remove segments
       segmentsSystem.dispose(scene);
@@ -103,7 +151,7 @@ export function setupPlayer(
         // Get current up vector (from planet center to player)
         const up = headMesh.position.clone().normalize();
 
-        // Handle player rotation
+        // Handle player rotation (turning left/right)
         if (keys.left) {
           currentDirection.applyAxisAngle(up, PLAYER_CONFIG.TURN_SPEED);
         }
@@ -111,11 +159,11 @@ export function setupPlayer(
           currentDirection.applyAxisAngle(up, -PLAYER_CONFIG.TURN_SPEED);
         }
 
-        // Ensure direction is perpendicular to up vector
+        // Ensure direction is perpendicular to up vector (tangent to surface)
         const right = new THREE.Vector3().crossVectors(currentDirection, up);
         currentDirection.crossVectors(up, right).normalize();
 
-        // Calculate new position
+        // Calculate new position based on current direction and speed
         const movement = currentDirection.clone().multiplyScalar(PLAYER_CONFIG.SPEED * deltaTime);
         const newPosition = headMesh.position.clone().add(movement);
 
@@ -126,15 +174,11 @@ export function setupPlayer(
           .clone()
           .add(surfaceNormal.multiplyScalar(PLAYER_CONFIG.HOVER_HEIGHT));
 
-        // Update head position
+        // Update player position
         headMesh.position.copy(hoverPosition);
 
-        // Update direction in head segment for proper tail following
-        if (segmentsSystem.segments.length > 0) {
-          segmentsSystem.segments[0].direction = currentDirection.clone();
-          segmentsSystem.segments[0].position = headMesh.position.clone();
-          segmentsSystem.segments[0].mesh.position.copy(headMesh.position);
-        }
+        // Orient the player to face the current direction and align with the surface
+        orientPlayerToSurface(headMesh, surfaceNormal, currentDirection);
 
         // Update debug alignment indicators if enabled
         if (PLAYER_CONFIG.DEBUG_ALIGNMENT) {
@@ -142,18 +186,21 @@ export function setupPlayer(
           directionLine.position.copy(hoverPosition);
           rightLine.position.copy(hoverPosition);
 
+          // Surface normal visualization (green)
           const normalPoints = [
             new THREE.Vector3(0, 0, 0),
-            surfaceNormal.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
+            surfaceNormal.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH * 1.5)
           ];
           surfaceNormalLine.geometry.setFromPoints(normalPoints);
 
+          // Current direction visualization (blue)
           const dirPoints = [
             new THREE.Vector3(0, 0, 0),
-            currentDirection.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)
+            currentDirection.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH * 1.2)
           ];
           directionLine.geometry.setFromPoints(dirPoints);
 
+          // Right vector visualization (red)
           const rightPoints = [
             new THREE.Vector3(0, 0, 0),
             right.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)

@@ -90,7 +90,7 @@ export function setupUI(gameState: GameState, startGame: () => void): GameUI {
 
   const heightSlider = document.createElement('input');
   heightSlider.type = 'range';
-  heightSlider.min = '100';
+  heightSlider.min = '1';
   heightSlider.max = '1000';
   heightSlider.value = '150';
   heightSlider.style.width = '200px';
@@ -104,7 +104,7 @@ export function setupUI(gameState: GameState, startGame: () => void): GameUI {
 
   const distanceSlider = document.createElement('input');
   distanceSlider.type = 'range';
-  distanceSlider.min = '100';
+  distanceSlider.min = '1';
   distanceSlider.max = '1000';
   distanceSlider.value = '200';
   distanceSlider.style.width = '200px';

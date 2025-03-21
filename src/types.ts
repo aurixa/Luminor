@@ -117,12 +117,13 @@ export interface TrailParticle {
 }
 
 export interface Segment {
-  mesh: THREE.Mesh;
-  position?: THREE.Vector3;
-  direction?: THREE.Vector3;
+  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
   isHead: boolean;
   index: number;
   hoverPhase?: number;
+  lastPathTime?: number;
+  targetPosition?: THREE.Vector3;
+  targetQuaternion?: THREE.Quaternion;
 }
 
 export interface Player {
