@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { PLAYER_CONFIG } from '../utils/constants';
+import { TrailSystem, TrailParticle } from '../types';
 
 interface AlignmentIndicators {
   surfaceNormalLine: THREE.Line;
@@ -58,11 +59,6 @@ export function createAlignmentIndicators(scene: THREE.Scene): AlignmentIndicato
   };
 }
 
-interface TrailParticle {
-  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
-  lifetime: number;
-}
-
 /**
  * Create a trail effect behind the player
  */
@@ -74,10 +70,7 @@ export function createTrailEffect(
     isHead: boolean;
     index: number;
   }>
-): {
-  update: (deltaTime: number) => void;
-  dispose: () => void;
-} | null {
+): TrailSystem | null {
   // Implement trail effect system
   if (!PLAYER_CONFIG.TRAIL_ENABLED) {
     return null;
@@ -93,7 +86,7 @@ export function createTrailEffect(
   });
 
   // Trail system
-  const trailSystem = {
+  const trailSystem: TrailSystem = {
     update: (deltaTime: number) => {
       // Spawn new particles
       if (playerSegments.length > 0) {
@@ -108,7 +101,7 @@ export function createTrailEffect(
           scene.add(particle);
 
           particles.push({
-            mesh: particle,
+            mesh: particle as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>,
             lifetime: PLAYER_CONFIG.TRAIL_LIFETIME
           });
         }

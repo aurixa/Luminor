@@ -148,15 +148,15 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
     resources,
     collectedResources,
     totalCollected,
-
-    // Set visibility of all resources
+    loadAll: async () => {
+      // No-op for now as we're not loading any external resources
+      return Promise.resolve();
+    },
     setVisible: function (visible: boolean): void {
       for (const resource of resources) {
         resource.mesh.visible = visible;
       }
     },
-
-    // Remove a specific resource
     remove: function (resource: Resource): void {
       const index = resources.indexOf(resource);
       if (index !== -1) {
@@ -166,8 +166,6 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
         totalCollected++;
       }
     },
-
-    // Update resources (animations, etc.)
     update: function (_player: Player, deltaTime: number): void {
       // Update respawn timer
       respawnTimer += deltaTime;
@@ -244,8 +242,6 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
         }
       }
     },
-
-    // Check for collisions with player
     checkCollisions: function (player: Player): void {
       const playerPos = player.getPosition();
       const collisionRadius = RESOURCE_CONFIG.COLLISION_RADIUS;
@@ -265,8 +261,6 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
         }
       }
     },
-
-    // Dispose of resources
     dispose: function (scene: THREE.Scene): void {
       for (const resource of resources) {
         scene.remove(resource.mesh);

@@ -74,9 +74,10 @@ const gameState: GameState = {
   callbacks: gameCallbacks,
   isPlaying: false,
   isPaused: false,
-  playerLength: 1,
+  isRunning: false,
   gameHasEnded: false,
   score: 0,
+  playerLength: 1,
   resourceCount: 0
 };
 
@@ -279,9 +280,7 @@ function resetGame(): void {
   }
 
   // Update UI
-  if (ui) {
-    ui.updateUI(gameState);
-  }
+  if (ui) ui.update(gameState);
 }
 
 /**
@@ -297,7 +296,7 @@ function handleEscapePressed(): void {
       gameLoop.resume();
     }
 
-    if (ui) ui.updateUI(gameState);
+    if (ui) ui.update(gameState);
   }
 }
 
@@ -348,7 +347,7 @@ function pauseGame(): void {
   if (gameLoop) {
     gameLoop.pause();
     gameState.isPaused = true;
-    if (ui) ui.updateUI(gameState);
+    if (ui) ui.update(gameState);
   }
 }
 
@@ -360,7 +359,7 @@ function returnToMenu(): void {
     gameLoop.stop();
     gameState.isPlaying = false;
     gameState.isPaused = false;
-    if (ui) ui.updateUI(gameState);
+    if (ui) ui.update(gameState);
   }
 }
 

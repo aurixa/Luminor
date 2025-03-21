@@ -10,8 +10,11 @@ import { PLANET_CONFIG, TERRAIN_CONFIG } from '../utils/constants';
 import { generateCraters } from './craterGeneration';
 import { createTerrainMaterial } from '../rendering/terrainMaterial';
 import { generatePlanetGeometry } from './terrainGeneration';
-import { Planet, Crater } from '../types';
+import { Crater, Planet } from '../types';
 
+/**
+ * Gets terrain noise at a specific position
+ */
 function getTerrainNoise(x: number, y: number, z: number, noise: SimplexNoise): number {
   const scale = PLANET_CONFIG.TERRAIN_SCALE;
 
@@ -21,15 +24,33 @@ function getTerrainNoise(x: number, y: number, z: number, noise: SimplexNoise): 
   const ny = y / length;
   const nz = z / length;
 
-  // Get base noise
-  const baseNoise = noise.noise3d(nx * scale, ny * scale, nz * scale);
+  let totalNoise = 0;
+  let amplitude = 1.0;
+  let frequency = scale;
+  let maxValue = 0;
 
-  // Get detail noise at double frequency but half amplitude
-  const detailNoise = noise.noise3d(nx * scale * 2, ny * scale * 2, nz * scale * 2) * 0.5;
+  // Reduced to 3 octaves for better performance while maintaining detail
+  for (let i = 0; i < 3; i++) {
+    const noiseValue = noise.noise3d(nx * frequency, ny * frequency, nz * frequency);
+    totalNoise += noiseValue * amplitude;
+    maxValue += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2.0;
+  }
 
-  // Combine and clamp to reasonable range (-1 to 1)
-  const combinedNoise = (baseNoise + detailNoise) * 0.5;
-  return Math.max(-1, Math.min(1, combinedNoise));
+  // Normalize the combined noise
+  totalNoise /= maxValue;
+
+  // Simplified ridge noise calculation
+  const ridgeNoise = Math.abs(noise.noise3d(nx * scale * 1.5, ny * scale * 1.5, nz * scale * 1.5));
+  const sharpRidge = ridgeNoise * ridgeNoise * 0.5;
+
+  // Use pre-calculated blend factor
+  const blendFactor = 0.3;
+  const finalNoise = totalNoise * (1 - blendFactor) + sharpRidge * blendFactor;
+
+  // Clamp to reasonable range (-1 to 1)
+  return Math.max(-1, Math.min(1, finalNoise));
 }
 
 function getCraterInfluence(direction: THREE.Vector3, craters: Crater[]): number {
@@ -45,9 +66,7 @@ function getCraterInfluence(direction: THREE.Vector3, craters: Crater[]): number
 }
 
 /**
- * Creates the planet and adds it to the scene
- * @param {THREE.Scene} scene - The Three.js scene to add the planet to
- * @returns {Planet} The created planet mesh with additional utilities
+ * Create a planet with terrain and craters
  */
 export function createPlanet(scene: THREE.Scene): Planet {
   console.log('Creating planet with radius:', PLANET_CONFIG.RADIUS);
@@ -163,6 +182,10 @@ export function createPlanet(scene: THREE.Scene): Planet {
       // Fallback to base radius if no valid intersection
       console.warn('Using fallback radius for surface point');
       return direction.multiplyScalar(PLANET_CONFIG.RADIUS);
+    },
+    raycast: (raycaster: THREE.Raycaster) => {
+      // Return the actual intersections from the planet mesh
+      return raycaster.intersectObject(planetMesh);
     }
   };
 }

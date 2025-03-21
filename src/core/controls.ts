@@ -35,10 +35,12 @@ export function setupControls(callbacks: GameCallbacks): Controls {
 
   return {
     keys,
-    disable: disableControls,
-    enable: enableControls,
+    disable: () => disable(),
+    enable: () => enable(),
     handleKeyDown: (event: KeyboardEvent) => handleKeyDown(event, callbacks),
-    handleKeyUp: (event: KeyboardEvent) => handleKeyUp(event)
+    handleKeyUp: (event: KeyboardEvent) => handleKeyUp(event),
+    update: () => {},
+    dispose: () => {}
   };
 }
 
@@ -51,21 +53,21 @@ function handleKeyDown(event: KeyboardEvent, callbacks: GameCallbacks): void {
 
   // Special key handlers
   switch (event.code) {
-  case 'Space':
-    if (callbacks.onSpacePressed) callbacks.onSpacePressed();
-    break;
-  case 'Escape':
-    if (callbacks.onEscapePressed) callbacks.onEscapePressed();
-    break;
-  case 'KeyP':
-    if (callbacks.onPausePressed) callbacks.onPausePressed();
-    break;
-  case 'KeyR':
-    if (callbacks.onRestartPressed) callbacks.onRestartPressed();
-    break;
-  case 'KeyM':
-    if (callbacks.onMenuPressed) callbacks.onMenuPressed();
-    break;
+    case 'Space':
+      if (callbacks.onSpacePressed) callbacks.onSpacePressed();
+      break;
+    case 'Escape':
+      if (callbacks.onEscapePressed) callbacks.onEscapePressed();
+      break;
+    case 'KeyP':
+      if (callbacks.onPausePressed) callbacks.onPausePressed();
+      break;
+    case 'KeyR':
+      if (callbacks.onRestartPressed) callbacks.onRestartPressed();
+      break;
+    case 'KeyM':
+      if (callbacks.onMenuPressed) callbacks.onMenuPressed();
+      break;
   }
 
   // Prevent default behavior for game control keys
@@ -93,25 +95,25 @@ function handleKeyUp(event: KeyboardEvent): void {
  */
 function updateKeyState(code: string, isPressed: boolean): void {
   switch (code) {
-  case 'ArrowUp':
-  case 'KeyW':
-    keys.up = isPressed;
-    break;
-  case 'ArrowDown':
-  case 'KeyS':
-    keys.down = isPressed;
-    break;
-  case 'ArrowLeft':
-  case 'KeyA':
-    keys.left = isPressed;
-    break;
-  case 'ArrowRight':
-  case 'KeyD':
-    keys.right = isPressed;
-    break;
-  case 'Space':
-    keys.space = isPressed;
-    break;
+    case 'ArrowUp':
+    case 'KeyW':
+      keys.up = isPressed;
+      break;
+    case 'ArrowDown':
+    case 'KeyS':
+      keys.down = isPressed;
+      break;
+    case 'ArrowLeft':
+    case 'KeyA':
+      keys.left = isPressed;
+      break;
+    case 'ArrowRight':
+    case 'KeyD':
+      keys.right = isPressed;
+      break;
+    case 'Space':
+      keys.space = isPressed;
+      break;
   }
 }
 
@@ -140,7 +142,7 @@ function isGameControlKey(code: string): boolean {
 /**
  * Disable game controls
  */
-function disableControls(): void {
+function disable(): void {
   resetKeys();
   if (keydownListener) {
     window.removeEventListener('keydown', keydownListener);
@@ -153,7 +155,7 @@ function disableControls(): void {
 /**
  * Enable game controls
  */
-function enableControls(): void {
+function enable(): void {
   resetKeys();
   if (keydownListener) {
     window.addEventListener('keydown', keydownListener);

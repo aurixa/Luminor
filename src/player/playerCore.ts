@@ -18,7 +18,7 @@ export function setupPlayer(
   scene: THREE.Scene,
   planet: Planet,
   _camera: THREE.PerspectiveCamera,
-  keys: InputKeys
+  keys: InputKeys | null = null
 ): Player {
   // Create player head
   const headGeometry = new THREE.SphereGeometry(PLAYER_CONFIG.SEGMENT_SIZE, 16, 16);
@@ -59,7 +59,7 @@ export function setupPlayer(
   }
 
   // Public methods for the player
-  const player: Player = {
+  const player = {
     mesh: headMesh,
     segments: segmentsSystem.segments,
     updateSegments: segmentsSystem.updateSegments,
@@ -164,11 +164,9 @@ export function setupPlayer(
 
       // Update segments to follow the head
       segmentsSystem.updateSegments(deltaTime);
-    }
-  };
-
-  // We don't need to add initial segments here, as player starts with length 3
-  // and the head is already counted as one segment.
+    },
+    getPlanet: (): Planet => planet
+  } satisfies Player;
 
   return player;
 }

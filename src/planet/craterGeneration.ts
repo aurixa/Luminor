@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { PLANET_CONFIG } from '../utils/constants';
+import { TERRAIN_CONFIG } from '../utils/constants';
 
 export interface Crater {
   position: THREE.Vector3;
@@ -18,27 +19,35 @@ export interface Crater {
 }
 
 /**
- * Generate craters for the planet surface
+ * Generate craters on the planet
  */
 export function generateCraters(): Crater[] {
   const craters: Crater[] = [];
-  const craterCount = PLANET_CONFIG.CRATER_COUNT;
 
-  for (let i = 0; i < craterCount; i++) {
-    // Generate random direction on sphere surface
+  // Skip if craters are disabled
+  if (!TERRAIN_CONFIG.CRATERS.ENABLED) {
+    return craters;
+  }
+
+  // Create specified number of craters
+  for (let i = 0; i < TERRAIN_CONFIG.CRATERS.COUNT; i++) {
+    // Generate random position on sphere
+    const phi = Math.random() * Math.PI * 2;
+    const theta = Math.random() * Math.PI;
     const direction = new THREE.Vector3(
-      Math.random() * 2 - 1,
-      Math.random() * 2 - 1,
-      Math.random() * 2 - 1
+      Math.sin(theta) * Math.cos(phi),
+      Math.sin(theta) * Math.sin(phi),
+      Math.cos(theta)
     ).normalize();
 
-    // Random crater size
+    // Random size within range
     const size =
-      PLANET_CONFIG.MIN_CRATER_SIZE +
-      Math.random() * (PLANET_CONFIG.MAX_CRATER_SIZE - PLANET_CONFIG.MIN_CRATER_SIZE);
+      TERRAIN_CONFIG.CRATERS.MIN_SIZE +
+      Math.random() * (TERRAIN_CONFIG.CRATERS.MAX_SIZE - TERRAIN_CONFIG.CRATERS.MIN_SIZE);
 
-    // Create crater using the helper function
-    craters.push(createCrater(direction, size));
+    // Create crater
+    const crater = createCrater(direction, size);
+    craters.push(crater);
   }
 
   return craters;
@@ -95,8 +104,8 @@ function createCrater(direction: THREE.Vector3, size: number): Crater {
     direction,
     radius,
     size,
-    depth: 0.2 + Math.random() * 0.3,
-    rimHeight: 0.1 + Math.random() * 0.2,
+    depth: TERRAIN_CONFIG.CRATERS.DEPTH_FACTOR,
+    rimHeight: TERRAIN_CONFIG.CRATERS.RIM_HEIGHT_FACTOR,
     falloff: 1.5 + Math.random() * 0.5
   };
 }

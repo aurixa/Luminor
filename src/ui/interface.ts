@@ -19,6 +19,7 @@ interface UIElements {
   restartButton: HTMLButtonElement;
   mainMenuButton: HTMLButtonElement;
   finalLength: HTMLElement;
+  resourceCount: HTMLElement | null;
   [key: string]: HTMLElement | null;
 }
 
@@ -40,7 +41,8 @@ export function setupUI(gameState: GameState, startGame: () => void): GameUI {
     pauseButton: getOrCreateElement('pause-button', 'button') as HTMLButtonElement,
     restartButton: getOrCreateElement('restart-button', 'button') as HTMLButtonElement,
     mainMenuButton: getOrCreateElement('main-menu-button', 'button') as HTMLButtonElement,
-    finalLength: getOrCreateElement('final-length', 'span')
+    finalLength: getOrCreateElement('final-length', 'span'),
+    resourceCount: document.getElementById('resource-count')
   };
 
   // Update the start button text to "PLAY"
@@ -140,32 +142,29 @@ export function setupUI(gameState: GameState, startGame: () => void): GameUI {
 
   // Return the UI controller interface
   return {
-    updateUI: (state = gameState) => updateGameUI(uiElements, state),
-    updateScore: (score: number) => updateScoreDisplay(uiElements, score),
-    updateResourceCount: () => {}, // No-op function as we're removing resources display
-    showGameOver: (finalScore?: number) => showGameOverScreen(uiElements, finalScore),
-    dispose: () => {
-      // Clean up event listeners
-      if (uiElements.startButton) {
-        uiElements.startButton.removeEventListener('click', () => {});
+    update: (state = gameState) => updateGameUI(uiElements, state),
+    updateScore: (score: number) => updateScore(uiElements, score),
+    updateResourceCount: (count: number) => {
+      if (uiElements.resourceCount) {
+        uiElements.resourceCount.textContent = `Resources: ${count}`;
       }
-      if (uiElements.mainMenuButton) {
-        uiElements.mainMenuButton.removeEventListener('click', () => {});
-      }
-      if (uiElements.pauseButton) {
-        uiElements.pauseButton.removeEventListener('click', () => {});
-      }
-      if (uiElements.restartButton) {
-        uiElements.restartButton.removeEventListener('click', () => {});
-      }
-
-      // Remove UI elements from DOM
+    },
+    showGameOver: (finalScore?: number) => showGameOver(uiElements, finalScore),
+    show: () => {
       for (const key in uiElements) {
-        if (uiElements[key] && document.body.contains(uiElements[key])) {
-          document.body.removeChild(uiElements[key] as HTMLElement);
+        if (uiElements[key]) {
+          showElement(uiElements[key] as HTMLElement);
         }
       }
-    }
+    },
+    hide: () => {
+      for (const key in uiElements) {
+        if (uiElements[key]) {
+          hideElement(uiElements[key] as HTMLElement);
+        }
+      }
+    },
+    dispose: () => dispose(uiElements)
   };
 }
 
@@ -382,12 +381,12 @@ function updateGameUI(uiElements: UIElements, gameState: GameState): void {
 
   // Update score display
   if (gameState.playerLength !== undefined) {
-    updateScoreDisplay(uiElements, gameState.playerLength);
+    updateScore(uiElements, gameState.playerLength);
   }
 
   // Handle game over state
   if (gameState.gameHasEnded) {
-    showGameOverScreen(uiElements, gameState.playerLength);
+    showGameOver(uiElements, gameState.playerLength);
   } else {
     hideElement(uiElements.gameOverScreen);
   }
@@ -397,7 +396,7 @@ function updateGameUI(uiElements: UIElements, gameState: GameState): void {
  * Update score display
  * @private
  */
-function updateScoreDisplay(uiElements: UIElements, score: number): void {
+function updateScore(uiElements: UIElements, score: number): void {
   uiElements.scoreDisplay.textContent = `Length: ${score}`;
 }
 
@@ -405,7 +404,7 @@ function updateScoreDisplay(uiElements: UIElements, score: number): void {
  * Show game over screen
  * @private
  */
-function showGameOverScreen(uiElements: UIElements, finalScore: number = 0): void {
+function showGameOver(uiElements: UIElements, finalScore: number = 0): void {
   // Update final score
   if (uiElements.finalLength) {
     uiElements.finalLength.textContent = finalScore.toString();
@@ -413,4 +412,31 @@ function showGameOverScreen(uiElements: UIElements, finalScore: number = 0): voi
 
   // Show game over screen
   showElement(uiElements.gameOverScreen);
+}
+
+/**
+ * Clean up UI elements
+ * @private
+ */
+function dispose(uiElements: UIElements): void {
+  // Clean up event listeners
+  if (uiElements.startButton) {
+    uiElements.startButton.removeEventListener('click', () => {});
+  }
+  if (uiElements.mainMenuButton) {
+    uiElements.mainMenuButton.removeEventListener('click', () => {});
+  }
+  if (uiElements.pauseButton) {
+    uiElements.pauseButton.removeEventListener('click', () => {});
+  }
+  if (uiElements.restartButton) {
+    uiElements.restartButton.removeEventListener('click', () => {});
+  }
+
+  // Remove UI elements from DOM
+  for (const key in uiElements) {
+    if (uiElements[key] && document.body.contains(uiElements[key])) {
+      document.body.removeChild(uiElements[key] as HTMLElement);
+    }
+  }
 }

@@ -7,16 +7,7 @@
 import * as THREE from 'three';
 import { PLAYER_CONFIG } from '../utils/constants';
 import { createGlowingMaterial } from '../utils/materials';
-import { Planet } from '../types';
-
-interface Segment {
-  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.Material>;
-  isHead: boolean;
-  index: number;
-  position?: THREE.Vector3;
-  direction?: THREE.Vector3;
-  hoverPhase?: number;
-}
+import { Planet, Segment } from '../types';
 
 interface SegmentsSystem {
   segments: Segment[];

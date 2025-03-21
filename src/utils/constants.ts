@@ -138,43 +138,48 @@ export interface PlanetConfig {
   readonly CRATER_COUNT: number;
   readonly MIN_CRATER_SIZE: number;
   readonly MAX_CRATER_SIZE: number;
+  readonly DEBUG_SPHERE_ENABLED: boolean;
+  readonly AXES_HELPER_ENABLED: boolean;
+  readonly DEBUG_SPHERE_COLOR: number;
+  readonly DEBUG_SPHERE_OPACITY: number;
+  readonly DEBUG_SPHERE_Y_OFFSET: number;
 }
 
 // Terrain configuration
 export const TERRAIN_CONFIG: TerrainConfig = {
-  HEIGHT_SCALE: 0.3, // Increased from 0.2 for more visible terrain
+  HEIGHT_SCALE: 0.4, // Increased for more dramatic terrain
   BASE_FREQUENCY: 0.5,
-  ROUGHNESS: 0.7,
+  ROUGHNESS: 0.8,
 
   LARGE_SCALE: {
-    FREQUENCY: 0.2,
-    INFLUENCE: 0.7 // Increased for more dramatic terrain
+    FREQUENCY: 0.15, // Decreased for wider mountain ranges
+    INFLUENCE: 0.8 // Increased for more dramatic terrain
   },
 
   MEDIUM_SCALE: {
     FREQUENCY: 0.4,
-    INFLUENCE: 0.4 // Increased for more visible features
+    INFLUENCE: 0.5 // Increased for more visible features
   },
 
   SMALL_SCALE: {
-    FREQUENCY: 0.8,
-    INFLUENCE: 0.3 // Increased for more detail
+    FREQUENCY: 1.0, // Increased for finer detail
+    INFLUENCE: 0.3
   },
 
   CRATERS: {
     ENABLED: true,
-    COUNT: 15, // Increased for more visible features
+    COUNT: 15,
     MIN_SIZE: 8,
     MAX_SIZE: 20,
-    DEPTH_FACTOR: 0.3, // Increased for more visible craters
-    RIM_HEIGHT_FACTOR: 0.4 // Increased for more visible rims
+    DEPTH_FACTOR: 0.3,
+    RIM_HEIGHT_FACTOR: 0.4
   }
 } as const;
 
 // Player configuration
 export const PLAYER_CONFIG: PlayerConfig = {
   SEGMENT_SIZE: 5.0,
-  SPEED: 80.0,
+  SPEED: 120.0,
   TURN_SPEED: 0.03,
   MIN_SEGMENT_DISTANCE: 5.0,
   MAX_SEGMENT_DISTANCE: 7.0,
@@ -210,8 +215,8 @@ export const CAMERA_CONFIG: CameraConfig = {
   FOV: 75,
   NEAR: 1,
   FAR: 20000,
-  FOLLOW_DISTANCE: 200,
-  HEIGHT_OFFSET: 150,
+  FOLLOW_DISTANCE: 150,
+  HEIGHT_OFFSET: 100,
   INITIAL_POSITION: {
     x: 0,
     y: 2000,
@@ -261,7 +266,7 @@ export const STARFIELD_CONFIG: StarfieldConfig = {
 
 // Terrain material configuration
 export const TERRAIN_MATERIAL_CONFIG: TerrainMaterialConfig = {
-  TEXTURE_SIZE: 2048,
+  TEXTURE_SIZE: 1024,
   ROUGHNESS: 0.7,
   METALNESS: 0.0,
   NORMAL_STRENGTH: 1.0,
@@ -285,11 +290,13 @@ export const CRATER_CONFIG: CraterConfig = {
 };
 
 // Planet configuration
-export const PLANET_CONFIG: PlanetConfig = {
+export const PLANET_CONFIG = {
   RADIUS: 2000,
-  RESOLUTION: 256,
-  TERRAIN_SCALE: 0.3,
-  CRATER_COUNT: 50,
-  MIN_CRATER_SIZE: 50,
-  MAX_CRATER_SIZE: 200
+  RESOLUTION: 128,
+  TERRAIN_SCALE: 1.0,
+  DEBUG_SPHERE_ENABLED: false,
+  AXES_HELPER_ENABLED: false,
+  DEBUG_SPHERE_COLOR: 0xff0000,
+  DEBUG_SPHERE_OPACITY: 0.5,
+  DEBUG_SPHERE_Y_OFFSET: 1.0
 } as const;

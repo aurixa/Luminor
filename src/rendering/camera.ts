@@ -51,6 +51,7 @@ export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Pl
   // Get player position and direction
   const playerPos = player.getPosition();
   const playerDir = player.getDirection();
+  const planet = player.getPlanet();
 
   // Calculate up vector from planet center to player
   const upVector = playerPos.clone().normalize();
@@ -61,28 +62,72 @@ export function updateCameraPosition(camera: THREE.PerspectiveCamera, player: Pl
   // Calculate forward vector (this is the direction the player is moving)
   const forward = new THREE.Vector3().crossVectors(upVector, right).normalize();
 
-  // Calculate camera target position
-  const cameraOffset = new THREE.Vector3();
+  // Calculate terrain angle for height adjustment
+  const terrainAngle = Math.acos(
+    Math.max(0, Math.min(1, upVector.dot(new THREE.Vector3(0, 1, 0))))
+  );
+  const heightAdjustment = Math.cos(terrainAngle) * CAMERA_CONFIG.HEIGHT_OFFSET;
 
-  // Position camera behind and slightly above player
-  cameraOffset.copy(forward).multiplyScalar(-CAMERA_CONFIG.FOLLOW_DISTANCE); // Negative to go behind
-  cameraOffset.add(upVector.multiplyScalar(CAMERA_CONFIG.HEIGHT_OFFSET));
+  // Adjust camera distance based on terrain angle
+  const distanceAdjustment = CAMERA_CONFIG.FOLLOW_DISTANCE * (1 + Math.sin(terrainAngle) * 0.2);
 
-  // Calculate desired camera position
-  const targetPosition = playerPos.clone().add(cameraOffset);
+  // Calculate ideal camera position (where we want the camera to be)
+  const idealOffset = new THREE.Vector3();
+  idealOffset.copy(forward).multiplyScalar(-distanceAdjustment);
+  idealOffset.add(upVector.multiplyScalar(heightAdjustment));
+  const idealPosition = playerPos.clone().add(idealOffset);
 
-  // Ensure minimum height from planet surface
-  const distanceFromCenter = targetPosition.length();
-  const minHeight = PLANET_CONFIG.RADIUS * 1.1; // Keep camera at least 10% above planet radius
-  if (distanceFromCenter < minHeight) {
-    targetPosition.normalize().multiplyScalar(minHeight);
+  // Raycast to check for terrain between camera and player
+  const raycaster = new THREE.Raycaster();
+  raycaster.set(playerPos, idealPosition.clone().sub(playerPos).normalize());
+  const intersects = planet.raycast(raycaster);
+
+  let targetPosition = idealPosition.clone();
+
+  if (intersects.length > 0) {
+    // Terrain is blocking view, adjust camera position
+    const intersection = intersects[0];
+    const distanceToIntersection = intersection.distance;
+    const minDistance = CAMERA_CONFIG.FOLLOW_DISTANCE * 0.3; // Minimum 30% of normal distance
+
+    if (distanceToIntersection < CAMERA_CONFIG.FOLLOW_DISTANCE) {
+      // Move camera closer to player, but maintain relative angle
+      const adjustedDistance = Math.max(minDistance, distanceToIntersection * 0.8);
+      targetPosition = playerPos
+        .clone()
+        .add(idealOffset.normalize().multiplyScalar(adjustedDistance));
+
+      // Ensure minimum height from surface
+      const surfacePoint = planet.getNearestPointOnSurface(targetPosition);
+      const surfaceNormal = surfacePoint.clone().normalize();
+      const minHeightOffset = PLANET_CONFIG.RADIUS * 0.05; // 5% of planet radius
+      targetPosition.copy(surfacePoint).add(surfaceNormal.multiplyScalar(minHeightOffset));
+    }
   }
 
-  // Update camera position with smoother interpolation
-  camera.position.lerp(targetPosition, 0.1);
+  // Apply different smoothing rates for position and rotation
+  const positionLerpFactor = 0.2; // Fast position following
+  const rotationLerpFactor = 0.05; // Slower rotation following
+
+  // Calculate current camera direction relative to player
+  const currentCameraDir = camera.position.clone().sub(playerPos).normalize();
+
+  // Interpolate camera direction
+  const newCameraDir = new THREE.Vector3();
+  newCameraDir
+    .copy(currentCameraDir)
+    .lerp(targetPosition.clone().sub(playerPos).normalize(), rotationLerpFactor);
+
+  // Apply position smoothing while maintaining the interpolated direction
+  const smoothedPosition = playerPos
+    .clone()
+    .add(newCameraDir.multiplyScalar(targetPosition.clone().sub(playerPos).length()));
+  camera.position.lerp(smoothedPosition, positionLerpFactor);
 
   // Look at a point slightly ahead of the player
-  const lookAtPoint = playerPos.clone().add(forward.multiplyScalar(50));
+  const lookAheadDistance = Math.min(30, distanceAdjustment * 0.2);
+  const lookAtOffset = forward.multiplyScalar(lookAheadDistance);
+  const lookAtPoint = playerPos.clone().add(lookAtOffset);
   camera.lookAt(lookAtPoint);
 
   // Ensure camera up vector is aligned with planet surface normal

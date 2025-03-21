@@ -87,9 +87,10 @@ const gameState: GameState = {
   callbacks: gameCallbacks,
   isPlaying: false,
   isPaused: false,
-  playerLength: 3,
+  isRunning: false,
   gameHasEnded: false,
   score: 0,
+  playerLength: 1,
   resourceCount: 0
 };
 
