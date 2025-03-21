@@ -5,6 +5,7 @@
  */
 
 import { GameState, GameUI } from '../types';
+import { CAMERA_CONFIG } from '../utils/constants';
 
 // UI element references
 interface UIElements {
@@ -67,6 +68,75 @@ export function setupUI(gameState: GameState, startGame: () => void): GameUI {
 
   // Setup event listeners
   setupEventListeners(uiElements, gameState, startGame);
+
+  // Create debug panel for camera controls
+  const debugPanel = document.createElement('div');
+  debugPanel.style.position = 'fixed';
+  debugPanel.style.top = '10px';
+  debugPanel.style.right = '10px';
+  debugPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+  debugPanel.style.padding = '10px';
+  debugPanel.style.borderRadius = '5px';
+  debugPanel.style.color = 'white';
+  debugPanel.style.fontFamily = 'monospace';
+  debugPanel.style.zIndex = '1000';
+
+  // Height slider
+  const heightLabel = document.createElement('div');
+  heightLabel.textContent = `Camera Height: ${CAMERA_CONFIG.HEIGHT_OFFSET}`;
+  debugPanel.appendChild(heightLabel);
+
+  const heightSlider = document.createElement('input');
+  heightSlider.type = 'range';
+  heightSlider.min = '100';
+  heightSlider.max = '1000';
+  heightSlider.value = '150';
+  heightSlider.style.width = '200px';
+  heightSlider.style.marginBottom = '10px';
+  debugPanel.appendChild(heightSlider);
+
+  // Distance slider
+  const distanceLabel = document.createElement('div');
+  distanceLabel.textContent = `Camera Distance: ${CAMERA_CONFIG.FOLLOW_DISTANCE}`;
+  debugPanel.appendChild(distanceLabel);
+
+  const distanceSlider = document.createElement('input');
+  distanceSlider.type = 'range';
+  distanceSlider.min = '100';
+  distanceSlider.max = '1000';
+  distanceSlider.value = '200';
+  distanceSlider.style.width = '200px';
+  debugPanel.appendChild(distanceSlider);
+
+  // Current values display
+  const valuesDisplay = document.createElement('div');
+  valuesDisplay.style.marginTop = '10px';
+  valuesDisplay.style.fontFamily = 'monospace';
+  debugPanel.appendChild(valuesDisplay);
+
+  // Update function
+  function updateCameraValues() {
+    const height = parseInt(heightSlider.value);
+    const distance = parseInt(distanceSlider.value);
+
+    // Update the config values
+    CAMERA_CONFIG.HEIGHT_OFFSET = height;
+    CAMERA_CONFIG.FOLLOW_DISTANCE = distance;
+
+    // Update labels
+    heightLabel.textContent = `Camera Height: ${height}`;
+    distanceLabel.textContent = `Camera Distance: ${distance}`;
+
+    // Show current values in copy-paste format
+    valuesDisplay.textContent = `Current values:\nHEIGHT_OFFSET: ${height}\nFOLLOW_DISTANCE: ${distance}`;
+  }
+
+  // Add event listeners
+  heightSlider.addEventListener('input', updateCameraValues);
+  distanceSlider.addEventListener('input', updateCameraValues);
+
+  // Add to document
+  document.body.appendChild(debugPanel);
 
   // Return the UI controller interface
   return {

@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { RESOURCE_CONFIG } from '../utils/constants';
+import { RESOURCE_CONFIG, PLANET_CONFIG, TERRAIN_CONFIG } from '../utils/constants';
 import { Resource, ResourceManager, Player, Planet } from '../types';
 import { createGlowingMaterial } from '../utils/materials';
 
@@ -28,6 +28,7 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
   // Try to create resources with minimum spacing
   let attemptsRemaining = RESOURCE_CONFIG.COUNT * 3; // Allow multiple attempts per resource
   let resourcesCreated = 0;
+  let failedAttempts = 0;
 
   while (resourcesCreated < RESOURCE_CONFIG.COUNT && attemptsRemaining > 0) {
     attemptsRemaining--;
@@ -40,11 +41,33 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
     const y = Math.sin(theta) * Math.sin(phi);
     const z = Math.cos(theta);
 
-    // Create direction vector and scale to planet radius
+    // Create direction vector and normalize
     const direction = new THREE.Vector3(x, y, z).normalize();
+    if (isNaN(direction.length())) {
+      console.error('Invalid direction generated for resource');
+      failedAttempts++;
+      continue;
+    }
 
     // Get position on actual planet surface with terrain
-    const surfacePos = planet.getNearestPointOnSurface(direction.multiplyScalar(planet.radius));
+    const surfacePos = planet.getNearestPointOnSurface(direction);
+    if (!surfacePos || isNaN(surfacePos.length())) {
+      console.error('Invalid surface position for resource');
+      failedAttempts++;
+      continue;
+    }
+
+    // Validate surface position is within expected range
+    const distance = surfacePos.length();
+    const maxRadius = PLANET_CONFIG.RADIUS * (1 + TERRAIN_CONFIG.HEIGHT_SCALE);
+    const minRadius = PLANET_CONFIG.RADIUS * (1 - TERRAIN_CONFIG.HEIGHT_SCALE);
+    if (distance > maxRadius || distance < minRadius) {
+      console.warn(
+        `Resource surface position (${distance.toFixed(2)}) outside expected range [${minRadius.toFixed(2)}, ${maxRadius.toFixed(2)}]`
+      );
+      failedAttempts++;
+      continue;
+    }
 
     // Position slightly above the surface
     const finalPos = surfacePos
@@ -61,100 +84,54 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
       }
     }
 
-    if (tooClose) continue; // Skip this position and try again
+    if (tooClose) {
+      failedAttempts++;
+      continue;
+    }
 
-    // Create resource geometry (more complex than a simple sphere)
-    const resourceGeometry = createResourceGeometry();
-    const resourceMaterial = createGlowingMaterial(
-      RESOURCE_CONFIG.COLOR,
-      RESOURCE_CONFIG.GLOW_INTENSITY
-    );
-    const resourceMesh = new THREE.Mesh(resourceGeometry, resourceMaterial);
+    try {
+      // Create resource geometry
+      const resourceGeometry = createResourceGeometry();
+      const resourceMaterial = createGlowingMaterial(
+        RESOURCE_CONFIG.COLOR,
+        RESOURCE_CONFIG.GLOW_INTENSITY
+      );
+      const resourceMesh = new THREE.Mesh(resourceGeometry, resourceMaterial);
 
-    // Set position
-    resourceMesh.position.copy(finalPos);
+      // Set position
+      resourceMesh.position.copy(finalPos);
 
-    // Orient to face away from planet center
-    resourceMesh.lookAt(new THREE.Vector3(0, 0, 0));
-    resourceMesh.rotateX(Math.PI / 2); // Adjust orientation
+      // Orient to face away from planet center
+      resourceMesh.lookAt(new THREE.Vector3(0, 0, 0));
+      resourceMesh.rotateX(Math.PI / 2); // Adjust orientation
 
-    // Add to scene
-    scene.add(resourceMesh);
+      // Add to scene
+      scene.add(resourceMesh);
 
-    // Add to resources array
-    resources.push({
-      mesh: resourceMesh,
-      position: finalPos,
-      collected: false,
-      // Add rotation animation parameters
-      rotationAxis: new THREE.Vector3(0, 1, 0).normalize(),
-      rotationSpeed: RESOURCE_CONFIG.ROTATION_SPEED * (0.8 + Math.random() * 0.4),
-      bobHeight: 0.2 + Math.random() * 0.3,
-      bobSpeed: 0.005 + Math.random() * 0.003,
-      bobPhase: Math.random() * Math.PI * 2,
-      originalY: finalPos.y
-    });
+      // Add to resources array
+      resources.push({
+        mesh: resourceMesh,
+        position: finalPos,
+        collected: false,
+        rotationAxis: new THREE.Vector3(0, 1, 0).normalize(),
+        rotationSpeed: RESOURCE_CONFIG.ROTATION_SPEED * (0.8 + Math.random() * 0.4),
+        bobHeight: 0.2 + Math.random() * 0.3,
+        bobSpeed: 0.005 + Math.random() * 0.003,
+        bobPhase: Math.random() * Math.PI * 2,
+        originalY: finalPos.y
+      });
 
-    // Remember this position to avoid clustering
-    existingPositions.push(finalPos.clone());
-    resourcesCreated++;
+      // Remember this position to avoid clustering
+      existingPositions.push(finalPos.clone());
+      resourcesCreated++;
+    } catch (error) {
+      console.error('Error creating resource:', error);
+      failedAttempts++;
+    }
   }
 
-  // If we couldn't create all resources with spacing, fill the rest with less spacing
-  while (resourcesCreated < RESOURCE_CONFIG.COUNT) {
-    // Generate a random position on the sphere
-    const phi = Math.random() * Math.PI * 2;
-    const theta = Math.acos(Math.random() * 2 - 1);
-
-    const x = Math.sin(theta) * Math.cos(phi);
-    const y = Math.sin(theta) * Math.sin(phi);
-    const z = Math.cos(theta);
-
-    // Create direction vector and scale to planet radius
-    const direction = new THREE.Vector3(x, y, z).normalize();
-
-    // Get position on actual planet surface with terrain
-    const surfacePos = planet.getNearestPointOnSurface(direction.multiplyScalar(planet.radius));
-
-    // Position slightly above the surface
-    const finalPos = surfacePos
-      .clone()
-      .normalize()
-      .multiplyScalar(surfacePos.length() + RESOURCE_CONFIG.HOVER_HEIGHT);
-
-    // Create resource geometry (more complex than a simple sphere)
-    const resourceGeometry = createResourceGeometry();
-    const resourceMaterial = createGlowingMaterial(
-      RESOURCE_CONFIG.COLOR,
-      RESOURCE_CONFIG.GLOW_INTENSITY
-    );
-    const resourceMesh = new THREE.Mesh(resourceGeometry, resourceMaterial);
-
-    // Set position
-    resourceMesh.position.copy(finalPos);
-
-    // Orient to face away from planet center
-    resourceMesh.lookAt(new THREE.Vector3(0, 0, 0));
-    resourceMesh.rotateX(Math.PI / 2); // Adjust orientation
-
-    // Add to scene
-    scene.add(resourceMesh);
-
-    // Add to resources array
-    resources.push({
-      mesh: resourceMesh,
-      position: finalPos,
-      collected: false,
-      // Add rotation animation parameters
-      rotationAxis: new THREE.Vector3(0, 1, 0).normalize(),
-      rotationSpeed: RESOURCE_CONFIG.ROTATION_SPEED * (0.8 + Math.random() * 0.4),
-      bobHeight: 0.2 + Math.random() * 0.3,
-      bobSpeed: 0.005 + Math.random() * 0.003,
-      bobPhase: Math.random() * Math.PI * 2,
-      originalY: finalPos.y
-    });
-
-    resourcesCreated++;
+  if (failedAttempts > 0) {
+    console.warn(`Failed to create ${failedAttempts} resources after maximum attempts`);
   }
 
   console.log(`Created ${resources.length} resources on the planet`);
@@ -282,6 +259,9 @@ export function setupResources(scene: THREE.Scene, planet: Planet): ResourceMana
           // Update counters
           collectedResources++;
           totalCollected++;
+
+          // Grow the player's tail by one segment
+          player.grow(1);
         }
       }
     },

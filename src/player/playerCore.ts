@@ -25,13 +25,23 @@ export function setupPlayer(
   const headMaterial = createGlowingMaterial(0x00ffaa, PLAYER_CONFIG.GLOW_INTENSITY);
   const headMesh = new THREE.Mesh(headGeometry, headMaterial);
 
-  // Set initial position on the light side of the planet
-  const initialPosition = new THREE.Vector3(planet.radius + PLAYER_CONFIG.HOVER_HEIGHT, 0, 0);
+  // Set initial position on the planet surface
+  const initialDirection = new THREE.Vector3(0, 1, 0); // Start at top of planet
+  const surfacePoint = planet.getNearestPointOnSurface(initialDirection);
+  const surfaceNormal = surfacePoint.clone().normalize();
+  const initialPosition = surfacePoint
+    .clone()
+    .add(surfaceNormal.multiplyScalar(PLAYER_CONFIG.HOVER_HEIGHT));
+
+  console.log('Spawning player at position:', initialPosition);
   headMesh.position.copy(initialPosition);
   scene.add(headMesh);
 
-  // Tracking variables
-  let currentDirection = new THREE.Vector3(0, 0, 1).normalize();
+  // Initial direction should be tangent to the planet surface
+  let currentDirection = new THREE.Vector3(1, 0, 0).normalize(); // Start moving east
+  const up = initialPosition.clone().normalize();
+  currentDirection = new THREE.Vector3().crossVectors(up, currentDirection).normalize();
+
   let isAlive = true;
 
   // Setup alignment indicators (debug visuals)
@@ -88,29 +98,26 @@ export function setupPlayer(
     update: (deltaTime: number) => {
       if (!isAlive) return;
 
-      const oldPosition = headMesh.position.clone();
-
       // Only move if player has control keys
       if (keys) {
+        // Get current up vector (from planet center to player)
+        const up = headMesh.position.clone().normalize();
+
         // Handle player rotation
         if (keys.left) {
-          // Rotate currentDirection around the up vector
-          const up = headMesh.position.clone().normalize();
           currentDirection.applyAxisAngle(up, PLAYER_CONFIG.TURN_SPEED);
-          currentDirection.normalize();
         }
-
         if (keys.right) {
-          // Rotate currentDirection around the up vector
-          const up = headMesh.position.clone().normalize();
           currentDirection.applyAxisAngle(up, -PLAYER_CONFIG.TURN_SPEED);
-          currentDirection.normalize();
         }
 
-        // Move head in the current direction
-        const newPosition = headMesh.position
-          .clone()
-          .add(currentDirection.clone().multiplyScalar(PLAYER_CONFIG.SPEED));
+        // Ensure direction is perpendicular to up vector
+        const right = new THREE.Vector3().crossVectors(currentDirection, up);
+        currentDirection.crossVectors(up, right).normalize();
+
+        // Calculate new position
+        const movement = currentDirection.clone().multiplyScalar(PLAYER_CONFIG.SPEED * deltaTime);
+        const newPosition = headMesh.position.clone().add(movement);
 
         // Project to planet surface and add hover height
         const surfacePoint = planet.getNearestPointOnSurface(newPosition);
@@ -122,37 +129,19 @@ export function setupPlayer(
         // Update head position
         headMesh.position.copy(hoverPosition);
 
-        // Log position change for debugging
-        const displacement = oldPosition.distanceTo(headMesh.position);
-        console.log(
-          `Player moved: ${displacement.toFixed(2)} units, New position: X:${headMesh.position.x.toFixed(2)}, Y:${headMesh.position.y.toFixed(2)}, Z:${headMesh.position.z.toFixed(2)}`
-        );
-
-        // Calculate player orientation
-        const up = hoverPosition.clone().normalize();
-        const right = new THREE.Vector3().crossVectors(currentDirection, up).normalize();
-        const forward = new THREE.Vector3().crossVectors(up, right).normalize();
-
-        // Update player direction
-        currentDirection = forward.clone();
-
         // Update direction in head segment for proper tail following
         if (segmentsSystem.segments.length > 0) {
           segmentsSystem.segments[0].direction = currentDirection.clone();
-
-          // Ensure head segment position is synchronized with head mesh position
           segmentsSystem.segments[0].position = headMesh.position.clone();
           segmentsSystem.segments[0].mesh.position.copy(headMesh.position);
         }
 
         // Update debug alignment indicators if enabled
         if (PLAYER_CONFIG.DEBUG_ALIGNMENT) {
-          // Update position
           surfaceNormalLine.position.copy(hoverPosition);
           directionLine.position.copy(hoverPosition);
           rightLine.position.copy(hoverPosition);
 
-          // Update alignment lines
           const normalPoints = [
             new THREE.Vector3(0, 0, 0),
             surfaceNormal.clone().multiplyScalar(PLAYER_CONFIG.ALIGNMENT_LINE_LENGTH)

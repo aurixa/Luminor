@@ -9,26 +9,49 @@ import { TERRAIN_MATERIAL_CONFIG } from '../utils/constants';
 import { SimplexNoise } from 'three/examples/jsm/math/SimplexNoise.js';
 
 /**
- * Create the terrain material with all necessary textures and maps
+ * Create the terrain material with procedurally generated textures
  */
 export function createTerrainMaterial(): THREE.MeshStandardMaterial {
-  // Create base material
+  console.log('Creating terrain material...');
+
+  // Create base material with visible properties
   const material = new THREE.MeshStandardMaterial({
+    color: TERRAIN_MATERIAL_CONFIG.BASE_COLOR,
     roughness: TERRAIN_MATERIAL_CONFIG.ROUGHNESS,
     metalness: TERRAIN_MATERIAL_CONFIG.METALNESS,
-    side: THREE.FrontSide,
-    flatShading: true
+    side: THREE.DoubleSide,
+    flatShading: true,
+    transparent: false,
+    opacity: 1.0,
+    emissive: new THREE.Color(0x111122),
+    emissiveIntensity: 0.2,
+    wireframe: false // Disable wireframe for solid view
   });
 
-  // Create textures
+  // Create textures with properly configured sizes
   const textureSize = TERRAIN_MATERIAL_CONFIG.TEXTURE_SIZE;
   const noise = new SimplexNoise();
 
-  // Generate textures
-  material.map = generateDiffuseMap(textureSize, noise);
-  material.normalMap = generateNormalMap(textureSize, noise);
-  material.roughnessMap = generateRoughnessMap(textureSize, noise);
+  // Generate procedural textures
+  console.log('Generating terrain textures with size:', textureSize);
 
+  // Enable basic color map for visibility
+  material.map = generateDiffuseMap(textureSize, noise);
+  material.map.needsUpdate = true;
+
+  // Explicitly update material
+  material.needsUpdate = true;
+
+  // Set normal strength
+  material.normalScale.set(
+    TERRAIN_MATERIAL_CONFIG.NORMAL_STRENGTH,
+    TERRAIN_MATERIAL_CONFIG.NORMAL_STRENGTH
+  );
+
+  // Force update for material
+  material.needsUpdate = true;
+
+  console.log('Terrain material created successfully');
   return material;
 }
 

@@ -105,7 +105,8 @@ export function setupSegments(
    * Add segments to the tail
    */
   function growTail(count: number): void {
-    console.log(`Growing tail by ${count} segments`);
+    // Only log once when growing multiple segments
+    console.log(`Growing player tail by ${count}`);
 
     for (let i = 0; i < count; i++) {
       addSegment();
@@ -129,16 +130,10 @@ export function setupSegments(
       // Reduce spacing for new segments by changing multiplier from 10 to 5
       const pathIndex = Math.min(segments.length * 5, path.length - 1);
       position = path[pathIndex].clone();
-
-      console.log(
-        `Adding segment at path index ${pathIndex}, position: X:${position.x.toFixed(2)}, Y:${position.y.toFixed(2)}, Z:${position.z.toFixed(2)}`
-      );
     } else {
       // Fallback - should never happen
       position = headMesh.position.clone();
-      console.log(
-        `FALLBACK: Adding segment at head position: X:${position.x.toFixed(2)}, Y:${position.y.toFixed(2)}, Z:${position.z.toFixed(2)}`
-      );
+      console.warn('Using fallback position for new segment');
     }
 
     // Project onto planet surface
@@ -161,8 +156,6 @@ export function setupSegments(
       index: segments.length,
       hoverPhase: (Math.PI * segments.length) / 2
     });
-
-    console.log(`Added segment ${segments.length}, total segments: ${segments.length}`);
   }
 
   /**

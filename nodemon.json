@@ -1,0 +1,9 @@
+{
+  "watch": ["src"],
+  "ext": "ts,tsx,js,jsx",
+  "ignore": ["*.test.ts", "*.spec.ts", "node_modules"],
+  "delay": "1000",
+  "execMap": {
+    "ts": "node -r ts-node/register"
+  }
+}

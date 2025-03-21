@@ -14,9 +14,22 @@ import { Planet, Crater } from '../types';
 
 function getTerrainNoise(x: number, y: number, z: number, noise: SimplexNoise): number {
   const scale = PLANET_CONFIG.TERRAIN_SCALE;
-  const baseNoise = noise.noise3d(x * scale, y * scale, z * scale);
-  const detailNoise = noise.noise3d(x * scale * 2, y * scale * 2, z * scale * 2) * 0.5;
-  return baseNoise + detailNoise;
+
+  // Normalize the input coordinates
+  const length = Math.sqrt(x * x + y * y + z * z);
+  const nx = x / length;
+  const ny = y / length;
+  const nz = z / length;
+
+  // Get base noise
+  const baseNoise = noise.noise3d(nx * scale, ny * scale, nz * scale);
+
+  // Get detail noise at double frequency but half amplitude
+  const detailNoise = noise.noise3d(nx * scale * 2, ny * scale * 2, nz * scale * 2) * 0.5;
+
+  // Combine and clamp to reasonable range (-1 to 1)
+  const combinedNoise = (baseNoise + detailNoise) * 0.5;
+  return Math.max(-1, Math.min(1, combinedNoise));
 }
 
 function getCraterInfluence(direction: THREE.Vector3, craters: Crater[]): number {
@@ -37,6 +50,8 @@ function getCraterInfluence(direction: THREE.Vector3, craters: Crater[]): number
  * @returns {Planet} The created planet mesh with additional utilities
  */
 export function createPlanet(scene: THREE.Scene): Planet {
+  console.log('Creating planet with radius:', PLANET_CONFIG.RADIUS);
+
   // Create noise generator
   const noise = new SimplexNoise();
 
@@ -44,28 +59,110 @@ export function createPlanet(scene: THREE.Scene): Planet {
   const craters = generateCraters();
 
   // Generate planet geometry
+  console.log('Generating planet geometry...');
   const { geometry } = generatePlanetGeometry(noise, craters);
 
-  // Create planet mesh
+  // Create planet mesh with material
+  console.log('Creating planet mesh with material...');
   const material = createTerrainMaterial();
-  const planetMesh = new THREE.Mesh(geometry, material);
 
-  // Add to scene
+  // Ensure material is visible
+  material.visible = true;
+  material.needsUpdate = true;
+
+  // Create the planet mesh
+  const planetMesh = new THREE.Mesh(geometry, material);
+  planetMesh.castShadow = true;
+  planetMesh.receiveShadow = true;
+
+  // Verify scale and position
+  planetMesh.scale.set(1, 1, 1); // Ensure no accidental scaling
+  planetMesh.position.set(0, 0, 0); // Ensure centered at origin
+
+  // Debug properties
+  planetMesh.userData = {
+    isLuminorPlanet: true,
+    radius: PLANET_CONFIG.RADIUS,
+    resolution: PLANET_CONFIG.RESOLUTION,
+    vertexCount: geometry.attributes.position.count
+  };
+
+  // Add to scene - explicitly specified
+  console.log('Adding planet to scene with properties:', {
+    position: planetMesh.position,
+    scale: planetMesh.scale,
+    radius: PLANET_CONFIG.RADIUS,
+    vertexCount: geometry.attributes.position.count,
+    boundingSphere: geometry.boundingSphere
+  });
   scene.add(planetMesh);
+
+  // Add debug sphere to visualize coordinate system
+  const debugSphereGeometry = new THREE.SphereGeometry(50, 16, 16);
+  const debugSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+  const debugSphere = new THREE.Mesh(debugSphereGeometry, debugSphereMaterial);
+  debugSphere.position.set(0, 2000, 0); // Place it at a known position
+  scene.add(debugSphere);
+  console.log('Added debug sphere at Y=2000');
+
+  // Add coordinate axes for debugging
+  const axesHelper = new THREE.AxesHelper(2000);
+  scene.add(axesHelper);
+  console.log('Added axes helper');
 
   // Return planet interface
   return {
     mesh: planetMesh,
     radius: PLANET_CONFIG.RADIUS,
     getNearestPointOnSurface: (point: THREE.Vector3) => {
-      const direction = point.clone().normalize();
-      let elevation = getTerrainNoise(direction.x, direction.y, direction.z, noise);
-
-      if (craters.length > 0) {
-        elevation += getCraterInfluence(direction, craters);
+      if (!point || !(point instanceof THREE.Vector3)) {
+        console.error('Invalid point provided to getNearestPointOnSurface:', point);
+        return new THREE.Vector3(0, PLANET_CONFIG.RADIUS, 0);
       }
 
-      return direction.multiplyScalar(PLANET_CONFIG.RADIUS * (1 + elevation));
+      const direction = point.clone().normalize();
+      if (isNaN(direction.length())) {
+        console.error('Invalid direction vector in getNearestPointOnSurface:', direction);
+        return new THREE.Vector3(0, PLANET_CONFIG.RADIUS, 0);
+      }
+
+      // Get the surface point from the geometry using raycasting
+      const raycaster = new THREE.Raycaster();
+      raycaster.set(new THREE.Vector3(0, 0, 0), direction);
+
+      try {
+        const intersects = raycaster.intersectObject(planetMesh);
+
+        if (intersects.length > 0) {
+          const intersectionPoint = intersects[0].point;
+
+          // Validate the intersection point
+          if (isNaN(intersectionPoint.length())) {
+            console.error('Invalid intersection point:', intersectionPoint);
+            return direction.multiplyScalar(PLANET_CONFIG.RADIUS);
+          }
+
+          // Ensure point is not too far from expected radius
+          const distance = intersectionPoint.length();
+          const maxRadius = PLANET_CONFIG.RADIUS * (1 + TERRAIN_CONFIG.HEIGHT_SCALE);
+          const minRadius = PLANET_CONFIG.RADIUS * (1 - TERRAIN_CONFIG.HEIGHT_SCALE);
+
+          if (distance > maxRadius || distance < minRadius) {
+            console.warn(
+              `Surface point distance (${distance.toFixed(2)}) outside expected range [${minRadius.toFixed(2)}, ${maxRadius.toFixed(2)}]`
+            );
+            return direction.multiplyScalar(PLANET_CONFIG.RADIUS);
+          }
+
+          return intersectionPoint;
+        }
+      } catch (error) {
+        console.error('Error in raycasting:', error);
+      }
+
+      // Fallback to base radius if no valid intersection
+      console.warn('Using fallback radius for surface point');
+      return direction.multiplyScalar(PLANET_CONFIG.RADIUS);
     }
   };
 }

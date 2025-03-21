@@ -36,7 +36,7 @@ let planet: Planet | null = null;
 let player: Player | null = null;
 let resources: ResourceManager | null = null;
 const gameLoop: GameLoop | null = null;
-let ui: GameUI | null = null;
+const ui: GameUI | null = null;
 
 const gameCallbacks: GameCallbacks = {
   onSpacePressed: () => {
@@ -92,16 +92,50 @@ gameState.callbacks = gameCallbacks;
  */
 export function initializeGame(): void {
   console.log('Initializing Luminor game...');
-  initializeGameComponents();
 
-  // Setup lighting
-  if (scene) {
-    setupLighting(scene);
-    createStarfield(scene);
+  try {
+    // Initialize core game components
+    initializeGameComponents();
+
+    // Make sure renderer is attached to DOM
+    if (renderer && !document.body.contains(renderer.domElement)) {
+      document.body.appendChild(renderer.domElement);
+    }
+
+    gameState.scene = scene;
+    gameState.camera = camera;
+    gameState.renderer = renderer;
+
+    // Setup stats
+    stats = new Stats();
+    document.body.appendChild(stats.dom);
+    gameState.stats = stats;
+
+    // Setup lighting and environment
+    if (scene) {
+      setupLighting(scene);
+      createStarfield(scene);
+    }
+
+    // Initialize player and resources
+    initializePlayerAndResources();
+
+    // Initialize UI and game loop
+    initializeUIAndGameLoop();
+
+    // Start the game loop
+    if (gameState.gameLoop) {
+      gameState.gameLoop.start();
+      gameState.isPlaying = true;
+      gameState.isPaused = false;
+      gameState.gameHasEnded = false;
+    } else {
+      throw new Error('Game loop failed to initialize');
+    }
+  } catch (error) {
+    console.error('Failed to initialize game:', error);
+    throw error;
   }
-
-  // Setup UI
-  ui = setupUI(gameState, startGame);
 }
 
 /**
@@ -196,21 +230,22 @@ function initializeUIAndGameLoop(): void {
  */
 function startGame(): void {
   try {
-    initializeGameComponents();
-    initializePlayerAndResources();
-    initializeUIAndGameLoop();
-
-    // Start game loop
-    if (gameState.gameLoop) {
-      gameState.gameLoop.start();
-    } else {
-      throw new Error('Game loop not initialized');
+    // Reset game state if needed
+    if (gameState.gameHasEnded || gameState.isPaused) {
+      resetGame();
     }
 
     // Update game state
     gameState.isPlaying = true;
     gameState.isPaused = false;
     gameState.gameHasEnded = false;
+
+    // Start/resume game loop
+    if (gameState.gameLoop) {
+      gameState.gameLoop.start();
+    } else {
+      throw new Error('Game loop not initialized');
+    }
   } catch (error) {
     console.error('Failed to start game:', error);
   }

@@ -7,8 +7,9 @@
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint \"src/**/*.{js,ts}\"",
-    "lint:fix": "eslint \"src/**/*.{js,ts}\" --fix",
+    "lint": "eslint 'src/**/*.{js,ts}' --quiet",
+    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
+    "lint:watch": "nodemon --watch src --ext js,ts,jsx,tsx --exec 'npm run lint'",
     "typecheck": "tsc --noEmit",
     "ts:validate": "tsc --noEmit && eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\""
@@ -26,6 +27,7 @@
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-promise": "^6.1.1",
     "globals": "^13.24.0",
+    "nodemon": "^3.1.9",
     "prettier": "^3.2.5",
     "typescript": "^4.9.5",
     "vite": "^5.0.12"

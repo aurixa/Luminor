@@ -21,15 +21,41 @@ interface PlanetGeometry {
  * @returns {PlanetGeometry} Object containing the geometry and positions
  */
 export function generatePlanetGeometry(noise: SimplexNoise, craters: Crater[]): PlanetGeometry {
-  // Create basic sphere geometry
+  console.log(
+    'Generating planet geometry with radius:',
+    PLANET_CONFIG.RADIUS,
+    'and resolution:',
+    PLANET_CONFIG.RESOLUTION
+  );
+
+  // Validate configuration
+  if (PLANET_CONFIG.RADIUS <= 0) {
+    throw new Error(`Invalid planet radius: ${PLANET_CONFIG.RADIUS}`);
+  }
+  if (PLANET_CONFIG.RESOLUTION < 32) {
+    throw new Error(`Resolution too low: ${PLANET_CONFIG.RESOLUTION}, minimum is 32`);
+  }
+
+  // Create basic sphere geometry with higher resolution
   const geometry = new THREE.SphereGeometry(
     PLANET_CONFIG.RADIUS,
     PLANET_CONFIG.RESOLUTION,
-    PLANET_CONFIG.RESOLUTION
+    PLANET_CONFIG.RESOLUTION,
+    0, // phiStart
+    Math.PI * 2, // phiLength
+    0, // thetaStart
+    Math.PI // thetaLength
   );
 
   // Get position attribute for manipulation
   const positions = geometry.attributes.position as THREE.Float32BufferAttribute;
+  const normals = geometry.attributes.normal as THREE.Float32BufferAttribute;
+
+  console.log('Applying terrain features to', positions.count, 'vertices');
+
+  // Track modifications for validation
+  let maxElevation = 0;
+  let minElevation = 0;
 
   // Apply terrain features to each vertex
   for (let i = 0; i < positions.count; i++) {
@@ -37,34 +63,88 @@ export function generatePlanetGeometry(noise: SimplexNoise, craters: Crater[]): 
     const y = positions.getY(i);
     const z = positions.getZ(i);
 
+    // Skip invalid vertices
+    if (isNaN(x) || isNaN(y) || isNaN(z)) {
+      console.error(`Invalid vertex ${i}: (${x}, ${y}, ${z})`);
+      continue;
+    }
+
     // Calculate normalized direction from center
     const direction = new THREE.Vector3(x, y, z).normalize();
+    if (isNaN(direction.length())) {
+      console.error(`Invalid direction for vertex ${i}`);
+      continue;
+    }
 
-    // Get elevation at this direction
+    // Get base elevation from noise
     const elevation = getTerrainNoise(direction.x, direction.y, direction.z, noise);
 
     // Apply crater modifications if applicable
     let totalElevation = elevation;
     if (craters && craters.length > 0) {
-      totalElevation += getCraterInfluence(direction, craters) / PLANET_CONFIG.RADIUS;
+      const craterInfluence = getCraterInfluence(direction, craters) / PLANET_CONFIG.RADIUS;
+      totalElevation = Math.max(-0.5, Math.min(0.5, elevation + craterInfluence));
     }
 
     // Scale the elevation and apply to the vertex
     const scaledElevation = totalElevation * TERRAIN_CONFIG.HEIGHT_SCALE * PLANET_CONFIG.RADIUS;
-    const scaleFactor = (PLANET_CONFIG.RADIUS + scaledElevation) / PLANET_CONFIG.RADIUS;
+    const finalRadius = PLANET_CONFIG.RADIUS + scaledElevation;
+
+    // Track elevation range
+    maxElevation = Math.max(maxElevation, scaledElevation);
+    minElevation = Math.min(minElevation, scaledElevation);
 
     // Set the new position
-    positions.setX(i, x * scaleFactor);
-    positions.setY(i, y * scaleFactor);
-    positions.setZ(i, z * scaleFactor);
+    const newPos = direction.multiplyScalar(finalRadius);
+    if (isNaN(newPos.length())) {
+      console.error(`Invalid new position for vertex ${i}`);
+      continue;
+    }
+    positions.setXYZ(i, newPos.x, newPos.y, newPos.z);
+
+    // Update normal to point outward from center
+    normals.setXYZ(i, direction.x, direction.y, direction.z);
   }
 
-  // Update normals
+  // Validate elevation range
+  const expectedMaxElevation = PLANET_CONFIG.RADIUS * TERRAIN_CONFIG.HEIGHT_SCALE;
+  if (
+    Math.abs(maxElevation) > expectedMaxElevation ||
+    Math.abs(minElevation) > expectedMaxElevation
+  ) {
+    console.warn(
+      `Elevation range [${minElevation.toFixed(2)}, ${maxElevation.toFixed(2)}] exceeds expected range [${-expectedMaxElevation.toFixed(2)}, ${expectedMaxElevation.toFixed(2)}]`
+    );
+  }
+
+  // Ensure geometry is properly updated
+  positions.needsUpdate = true;
+  normals.needsUpdate = true;
+
+  // Compute vertex normals for smooth shading
   geometry.computeVertexNormals();
 
   // Add texture coordinates based on position
   generateTextureCoordinates(geometry, positions);
 
+  // Mark geometry for update
+  geometry.computeBoundingSphere();
+  geometry.computeBoundingBox();
+
+  // Validate final geometry
+  if (!geometry.boundingSphere) {
+    console.error('Failed to compute bounding sphere');
+  } else {
+    const sphereRadius = geometry.boundingSphere.radius;
+    const expectedMaxRadius = PLANET_CONFIG.RADIUS * (1 + TERRAIN_CONFIG.HEIGHT_SCALE);
+    if (sphereRadius > expectedMaxRadius) {
+      console.warn(
+        `Bounding sphere radius (${sphereRadius.toFixed(2)}) exceeds expected maximum (${expectedMaxRadius.toFixed(2)})`
+      );
+    }
+  }
+
+  console.log('Planet geometry generated successfully');
   return { geometry, positions };
 }
 
@@ -106,32 +186,25 @@ function generateTextureCoordinates(
 
 /**
  * Calculate terrain noise at a given position
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {number} z - Z coordinate
- * @param {SimplexNoise} noise - The noise generator
- * @returns {number} The terrain noise value
  */
 export function getTerrainNoise(x: number, y: number, z: number, noise: SimplexNoise): number {
-  // Apply multiple octaves of noise with different frequencies and influences
-  let totalNoise = 0;
+  const scale = PLANET_CONFIG.TERRAIN_SCALE;
 
-  // Large scale features (major terrain undulations)
-  totalNoise +=
-    getOctaveNoise(x, y, z, TERRAIN_CONFIG.LARGE_SCALE.FREQUENCY, noise) *
-    TERRAIN_CONFIG.LARGE_SCALE.INFLUENCE;
+  // Normalize the input coordinates
+  const length = Math.sqrt(x * x + y * y + z * z);
+  const nx = x / length;
+  const ny = y / length;
+  const nz = z / length;
 
-  // Medium scale features
-  totalNoise +=
-    getOctaveNoise(x, y, z, TERRAIN_CONFIG.MEDIUM_SCALE.FREQUENCY, noise) *
-    TERRAIN_CONFIG.MEDIUM_SCALE.INFLUENCE;
+  // Get base noise
+  const baseNoise = noise.noise3d(nx * scale, ny * scale, nz * scale);
 
-  // Small scale features
-  totalNoise +=
-    getOctaveNoise(x, y, z, TERRAIN_CONFIG.SMALL_SCALE.FREQUENCY, noise) *
-    TERRAIN_CONFIG.SMALL_SCALE.INFLUENCE;
+  // Get detail noise at double frequency but half amplitude
+  const detailNoise = noise.noise3d(nx * scale * 2, ny * scale * 2, nz * scale * 2) * 0.5;
 
-  return totalNoise;
+  // Combine and clamp to reasonable range (-1 to 1)
+  const combinedNoise = (baseNoise + detailNoise) * 0.5;
+  return Math.max(-1, Math.min(1, combinedNoise));
 }
 
 /**

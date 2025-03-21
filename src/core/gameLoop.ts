@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { GameState, GameCallbacks, Player, ResourceManager, GameLoop, Planet } from '../types';
+import { updateCameraPosition } from '../rendering/camera';
 
 // Animation loop timing variables
 let lastTime = 0;
@@ -148,6 +149,9 @@ function animate(
       if (resources) {
         resources.checkCollisions(player);
       }
+
+      // Update camera to follow player
+      updateCameraPosition(camera, player);
     }
 
     // Update resources
@@ -158,11 +162,6 @@ function animate(
     // Update game state and score
     if (callbacks.onScoreUpdated) {
       callbacks.onScoreUpdated(gameState.score);
-    }
-
-    // Update camera position
-    if (callbacks.updateCamera) {
-      callbacks.updateCamera(camera);
     }
   }
 
