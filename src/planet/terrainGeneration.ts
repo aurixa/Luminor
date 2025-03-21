@@ -208,29 +208,6 @@ export function getTerrainNoise(x: number, y: number, z: number, noise: SimplexN
 }
 
 /**
- * Calculate octave noise at a given position and frequency
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {number} z - Z coordinate
- * @param {number} frequency - The noise frequency
- * @param {SimplexNoise} noise - The noise generator
- * @returns {number} The octave noise value
- */
-function getOctaveNoise(
-  x: number,
-  y: number,
-  z: number,
-  frequency: number,
-  noise: SimplexNoise
-): number {
-  // Basic 3D simplex noise
-  const noiseValue = noise.noise3d(x * frequency, y * frequency, z * frequency);
-
-  // Transformations to make the terrain more interesting
-  return noiseValue;
-}
-
-/**
  * Helper function to smooth step a value between edge0 and edge1
  * @param {number} edge0 - Lower edge of the transition
  * @param {number} edge1 - Upper edge of the transition

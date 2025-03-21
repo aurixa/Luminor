@@ -22,7 +22,9 @@
       "plugins": ["@typescript-eslint"],
       "extends": ["plugin:@typescript-eslint/recommended"],
       "parserOptions": {
-        "project": null
+        "project": "./tsconfig.json",
+        "tsconfigRootDir": ".",
+        "createDefaultProgram": true
       },
       "rules": {
         "@typescript-eslint/indent": "off",

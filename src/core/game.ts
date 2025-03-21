@@ -57,9 +57,6 @@ const gameCallbacks: GameCallbacks = {
   },
   onScoreUpdate: (score: number) => {
     gameState.score = score;
-  },
-  updateCamera: (camera: THREE.PerspectiveCamera) => {
-    gameState.camera = camera;
   }
 };
 

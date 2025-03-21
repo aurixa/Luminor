@@ -78,7 +78,6 @@ export interface GameCallbacks {
   onGameOver: (finalScore?: number) => void;
   onGameWon: () => void;
   onScoreUpdate: (score: number) => void;
-  updateCamera: (camera: THREE.PerspectiveCamera) => void;
 }
 
 // Player interface
@@ -234,4 +233,17 @@ export interface GameLoopOptions {
 
 export interface StarField extends THREE.Points {
   update: (deltaTime: number) => void;
+}
+
+export interface CameraConfig {
+  FOV: number;
+  NEAR: number;
+  FAR: number;
+  FOLLOW_DISTANCE: number;
+  HEIGHT_OFFSET: number;
+  INITIAL_POSITION: {
+    x: number;
+    y: number;
+    z: number;
+  };
 }

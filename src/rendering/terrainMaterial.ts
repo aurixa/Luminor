@@ -39,8 +39,13 @@ export function createTerrainMaterial(): THREE.MeshStandardMaterial {
   material.map = generateDiffuseMap(textureSize, noise);
   material.map.needsUpdate = true;
 
-  // Explicitly update material
-  material.needsUpdate = true;
+  // Add normal map for surface detail
+  material.normalMap = generateNormalMap(textureSize, noise);
+  material.normalMap.needsUpdate = true;
+
+  // Add roughness map for surface variation
+  material.roughnessMap = generateRoughnessMap(textureSize, noise);
+  material.roughnessMap.needsUpdate = true;
 
   // Set normal strength
   material.normalScale.set(

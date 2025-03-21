@@ -4,7 +4,6 @@
  * Code written by a mixture of AI (2025)
  */
 
-import * as THREE from 'three';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { initializeScene } from './core/sceneSetup';
 import { setupControls } from './core/controls';
@@ -14,7 +13,6 @@ import { setupPlayer } from './player/playerCore';
 import { GameState, GameCallbacks } from './types';
 import { setupResources } from './core/resources';
 import { setupUI } from './ui/interface';
-import { CAMERA_CONFIG } from './utils/constants';
 
 // Game callbacks
 const gameCallbacks: GameCallbacks = {
@@ -70,17 +68,6 @@ const gameCallbacks: GameCallbacks = {
   onScoreUpdate: () => {
     if (gameState.gameUI) {
       gameState.gameUI.updateScore(gameState.score);
-    }
-  },
-  updateCamera: () => {
-    if (gameState.camera && gameState.player && gameState.planet) {
-      const targetPosition = new THREE.Vector3();
-      gameState.player.mesh.getWorldPosition(targetPosition);
-
-      const cameraOffset = new THREE.Vector3(0, CAMERA_CONFIG.HEIGHT, CAMERA_CONFIG.DISTANCE);
-
-      gameState.camera.position.copy(targetPosition).add(cameraOffset);
-      gameState.camera.lookAt(targetPosition);
     }
   }
 };
